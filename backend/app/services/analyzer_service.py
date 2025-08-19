@@ -11,7 +11,7 @@ class AnalyzerService:
         self.llm = OllamaLLM(model=OLLAMA_MODEL)
         self.prompt = ChatPromptTemplate.from_template(QUERY_PROMPT)
 
-    def analyze_profile(self, ref: int, question="What contracts does this client have?") -> str:
+    def analyze_profile(self, ref: int, question="Ce client est-il marié ?") -> str:
         """
         Query client data from MongoDB and use Ollama LLM to answer a question.
         
