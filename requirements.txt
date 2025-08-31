@@ -1,0 +1,24 @@
+fastapi
+uvicorn
+pymongo
+langchain
+langchain-ollama
+langgraph
+langsmith
+pydantic
+pandas
+openpyxl
+pydantic_settings
+pydantic[email]
+
+# Added for notifications services
+python-dotenv
+sqlalchemy
+aiosmtplib
+twilio
+requests
+
+# Frontend
+streamlit
+pandas
+faker
