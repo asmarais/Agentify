@@ -12,6 +12,11 @@ class Settings(BaseSettings):
     TWILIO_WHATSAPP_TO: str
     TWILIO_SMS_FROM: str
     TWILIO_SMS_TO: str
+    DB_HOST: str
+    DB_NAME: str
+    DB_USER: str
+    DB_PASSWORD: str
+    DB_PORT: int
     """
     MONGO_URI: str
     DB_NAME: str

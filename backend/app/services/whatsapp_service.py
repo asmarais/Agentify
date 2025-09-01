@@ -8,10 +8,11 @@ class WhatsAppService:
         self.client = Client(account_sid, auth_token)
 
     def send_message(self, to: str, body: str):
+        # Ajout du message personnalisé
+        customized_body = f"Bonjour,\n\n{body}\n\nPour plus d'information contacter nous via email: contact-bh@gmail.com"
         message = self.client.messages.create(
             from_=settings.TWILIO_WHATSAPP_FROM,
-            body=body,
+            body=customized_body,
             to=settings.TWILIO_WHATSAPP_TO
         )
         return message.sid
-

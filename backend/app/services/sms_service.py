@@ -8,9 +8,11 @@ class SMSService:
         self.client = Client(account_sid, auth_token)
 
     def send_sms(self, to: str, body: str):
+        # Ajout du message personnalisé
+        customized_body = f"Bonjour,\n\n{body}\n\n"
         message = self.client.messages.create(
             from_=settings.TWILIO_SMS_FROM,
-            body=body,
-            to=to
+            body=customized_body,
+            to=settings.TWILIO_SMS_TO
         )
         return message.sid

@@ -25,13 +25,7 @@ faker
 
 # Test email
 
-email
-asyncio
-aiosmtplib
-httpx
-langchain
 psycopg2-binary
 langgraph
 langchain-core
 langchain-ollama
-

@@ -80,7 +80,6 @@ async def pitch_generation_node(state: AgentState, style: str = "professionnel",
 
         pitch_text = await llm.ainvoke(formatted_prompt.to_messages())
 
-        # ✅ Clean LLM output (strip markdown / extra text)
         cleaned_output = str(pitch_text).strip()
         if cleaned_output.startswith("```"):
             cleaned_output = cleaned_output.strip("`").replace("json", "").strip()

@@ -1,3 +1,22 @@
+import sys
+import os
+
+parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, parent_dir)  # Insert at the beginning to prioritize
+
+# Debug: Print the Python path to verify
+print(f"Parent directory: {parent_dir}")
+print(f"Updated sys.path: {sys.path}")
+
+# Try the import
+try:
+    from shared.database import GestionnaireBaseDonnees, StatutInteraction, TypeReponse, InteractionEmail, tester_connexion_postgresql
+    print("Import from shared.database successful!")
+except ImportError as e:
+    print(f"Import failed: {e}")
+    raise  # Re-raise to see the full traceback
+
+# Rest of your code...
 import imaplib
 import smtplib
 import email
@@ -9,11 +28,7 @@ import json
 from datetime import datetime
 import logging
 from typing import Dict, List, Optional, TypedDict, Annotated
-import psycopg2
-from psycopg2.extras import RealDictCursor
 import os
-from dataclasses import dataclass
-from enum import Enum
 
 from langgraph.graph import StateGraph
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
@@ -25,20 +40,7 @@ from langchain_core.prompts import ChatPromptTemplate, SystemMessagePromptTempla
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-class StatutInteraction(Enum):
-    NOUVEAU = "nouveau"
-    EN_COURS = "en_cours"  
-    INTERESSE = "interesse"
-    DEVIS_DEMANDE = "devis_demande"
-    NON_INTERESSE = "non_interesse"
-    FERME = "ferme"
-
-class TypeReponse(Enum):
-    INTERESSE = "interesse"
-    NON_INTERESSE = "non_interesse"
-    DEMANDE_DEVIS = "demande_devis"
-    BESOIN_INFO = "besoin_info"
-    INCONNU = "inconnu"
+# Rest of your code (e.g., EtatAgent, ClassificateurEmail, etc.)...
 
 # État de l'agent LangGraph
 class EtatAgent(TypedDict):
@@ -49,277 +51,14 @@ class EtatAgent(TypedDict):
     type_reponse: Optional[TypeReponse]
     reponse_ia: Optional[str]
     statut_interaction: Optional[StatutInteraction]
-    question_suivi: Optional[str]
     message_id: str
     branche_assurance: Optional[str]
-
-@dataclass
-class InteractionEmail:
-    email_id: str
-    expediteur_email: str
-    sujet: str
-    corps: str
-    timestamp: datetime
-    type_reponse: TypeReponse
-    reponse_ia: str
-    conversation_id: str
-    statut: StatutInteraction
-    branche_assurance: Optional[str] = None
-
-class GestionnaireBaseDonnees:
-    """Gestionnaire de base de données PostgreSQL pour l'agent email"""
-    
-    def __init__(self, config_db: Dict):
-        self.config_db = config_db
-        self.init_base_donnees()
-    
-    def obtenir_connexion(self):
-        """Obtient une connexion à la base PostgreSQL"""
-        try:
-            conn = psycopg2.connect(
-                host=self.config_db['host'],
-                database=self.config_db['database'],
-                user=self.config_db['user'],
-                password=self.config_db['password'],
-                port=self.config_db['port']
-            )
-            return conn
-        except Exception as e:
-            logger.error(f"Erreur connexion PostgreSQL: {e}")
-            raise
-    
-    def init_base_donnees(self):
-        """Initialise la base de données avec les tables nécessaires"""
-        conn = self.obtenir_connexion()
-        cursor = conn.cursor()
-        
-        try:
-            # Table des conversations
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS conversations (
-                    id TEXT PRIMARY KEY,
-                    expediteur_email TEXT NOT NULL,
-                    cree_le TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    derniere_maj TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    statut TEXT DEFAULT 'actif'
-                )
-            ''')
-            
-            # Table des interactions email
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS interactions_email (
-                    id SERIAL PRIMARY KEY,
-                    email_id TEXT UNIQUE,
-                    conversation_id TEXT,
-                    expediteur_email TEXT NOT NULL,
-                    sujet TEXT,
-                    corps TEXT,
-                    type_reponse TEXT,
-                    reponse_ia TEXT,
-                    statut TEXT,
-                    branche_assurance TEXT,
-                    timestamp TIMESTAMP,
-                    FOREIGN KEY (conversation_id) REFERENCES conversations (id)
-                )
-            ''')
-            
-            # Table des données client
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS donnees_client (
-                    id SERIAL PRIMARY KEY,
-                    email TEXT UNIQUE,
-                    nom TEXT,
-                    entreprise TEXT,
-                    telephone TEXT,
-                    niveau_interet INTEGER DEFAULT 0,
-                    dernier_contact TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    notes TEXT
-                )
-            ''')
-            
-            # Table Q&A assurance
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS qa_assurance (
-                    id SERIAL PRIMARY KEY,
-                    branche TEXT,
-                    garantie TEXT,
-                    question TEXT,
-                    reponse TEXT
-                )
-            ''')
-            
-            # Créer des index pour améliorer les performances
-            cursor.execute('''
-                CREATE INDEX IF NOT EXISTS idx_interactions_expediteur 
-                ON interactions_email(expediteur_email)
-            ''')
-            
-            cursor.execute('''
-                CREATE INDEX IF NOT EXISTS idx_interactions_timestamp 
-                ON interactions_email(timestamp)
-            ''')
-            
-            cursor.execute('''
-                CREATE INDEX IF NOT EXISTS idx_qa_branche 
-                ON qa_assurance(branche)
-            ''')
-            
-            conn.commit()
-            logger.info("Base de données PostgreSQL initialisée avec succès")
-            
-        except Exception as e:
-            conn.rollback()
-            logger.error(f"Erreur lors de l'initialisation de la base: {e}")
-            raise
-        finally:
-            cursor.close()
-            conn.close()
-    
-    def sauvegarder_interaction(self, interaction: InteractionEmail):
-        """Sauvegarde l'interaction email"""
-        conn = self.obtenir_connexion()
-        cursor = conn.cursor()
-        
-        try:
-            # Insérer ou ignorer la conversation
-            cursor.execute('''
-                INSERT INTO conversations (id, expediteur_email)
-                VALUES (%s, %s)
-                ON CONFLICT (id) DO NOTHING
-            ''', (interaction.conversation_id, interaction.expediteur_email))
-            
-            # Mettre à jour la dernière modification
-            cursor.execute('''
-                UPDATE conversations 
-                SET derniere_maj = CURRENT_TIMESTAMP
-                WHERE id = %s
-            ''', (interaction.conversation_id,))
-            
-            # Insérer ou remplacer l'interaction
-            cursor.execute('''
-                INSERT INTO interactions_email 
-                (email_id, conversation_id, expediteur_email, sujet, corps, 
-                 type_reponse, reponse_ia, statut, branche_assurance, timestamp)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (email_id) DO UPDATE SET
-                    type_reponse = EXCLUDED.type_reponse,
-                    reponse_ia = EXCLUDED.reponse_ia,
-                    statut = EXCLUDED.statut,
-                    branche_assurance = EXCLUDED.branche_assurance,
-                    timestamp = EXCLUDED.timestamp
-            ''', (interaction.email_id, interaction.conversation_id, 
-                  interaction.expediteur_email, interaction.sujet, 
-                  interaction.corps, interaction.type_reponse.value, 
-                  interaction.reponse_ia, interaction.statut.value,
-                  interaction.branche_assurance, interaction.timestamp))
-            
-            conn.commit()
-            logger.info(f"Interaction sauvegardée: {interaction.expediteur_email}")
-            
-        except Exception as e:
-            conn.rollback()
-            logger.error(f"Erreur lors de la sauvegarde: {e}")
-            raise
-        finally:
-            cursor.close()
-            conn.close()
-    
-    def obtenir_historique_conversation(self, expediteur_email: str, limite: int = 5) -> List[Dict]:
-        """Obtient l'historique de conversation"""
-        conn = self.obtenir_connexion()
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
-        
-        try:
-            cursor.execute('''
-                SELECT corps, reponse_ia, type_reponse, statut, timestamp
-                FROM interactions_email
-                WHERE expediteur_email = %s
-                ORDER BY timestamp DESC
-                LIMIT %s
-            ''', (expediteur_email, limite))
-            
-            historique = []
-            for row in cursor.fetchall():
-                historique.append({
-                    'corps': row['corps'],
-                    'reponse_ia': row['reponse_ia'],
-                    'type_reponse': row['type_reponse'],
-                    'statut': row['statut'],
-                    'timestamp': row['timestamp']
-                })
-            
-            return historique
-            
-        except Exception as e:
-            logger.error(f"Erreur récupération historique: {e}")
-            return []
-        finally:
-            cursor.close()
-            conn.close()
-    
-    def obtenir_qa_par_branche(self, branche: str) -> List[Dict]:
-        """Obtient les Q&A pour une branche d'assurance"""
-        conn = self.obtenir_connexion()
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
-        
-        try:
-            cursor.execute('''
-                SELECT question, reponse, garantie
-                FROM qa_assurance
-                WHERE branche = %s
-            ''', (branche,))
-            
-            qa_list = []
-            for row in cursor.fetchall():
-                qa_list.append({
-                    'question': row['question'],
-                    'reponse': row['reponse'],
-                    'garantie': row['garantie']
-                })
-            
-            return qa_list
-            
-        except Exception as e:
-            logger.error(f"Erreur récupération Q&A: {e}")
-            return []
-        finally:
-            cursor.close()
-            conn.close()
-    
-    def mettre_a_jour_statut_derniere_interaction(self, email_expediteur: str, nouveau_statut: str) -> bool:
-        """Met à jour le statut de la dernière interaction"""
-        conn = self.obtenir_connexion()
-        cursor = conn.cursor()
-        
-        try:
-            cursor.execute('''
-                UPDATE interactions_email 
-                SET statut = %s
-                WHERE expediteur_email = %s
-                  AND timestamp = (
-                      SELECT MAX(timestamp) 
-                      FROM interactions_email 
-                      WHERE expediteur_email = %s
-                  )
-            ''', (nouveau_statut, email_expediteur, email_expediteur))
-            
-            conn.commit()
-            return cursor.rowcount > 0
-            
-        except Exception as e:
-            conn.rollback()
-            logger.error(f"Erreur mise à jour statut: {e}")
-            return False
-        finally:
-            cursor.close()
-            conn.close()
 
 # Outils LangGraph mis à jour pour PostgreSQL
 @tool
 def mettre_a_jour_statut_interaction(email_expediteur: str, nouveau_statut: str) -> str:
     """Met à jour le statut d'interaction dans la base de données PostgreSQL"""
     try:
-        # Récupérer la config de la base depuis l'environnement global
         config_db = {
             'host': 'localhost',
             'database': 'Bh',
@@ -448,24 +187,6 @@ class ClassificateurEmail:
             re.compile(r'comment\s*ça\s*fonctionne', re.IGNORECASE),
             re.compile(r'qu[\'’]est\s*ce\s*que\s*c[\'’]est', re.IGNORECASE)
         ]
-
-    def detecter_branche_assurance(self, contenu: str) -> Optional[str]:
-        """Détecte la branche d'assurance mentionnée"""
-        contenu_lower = contenu.lower()
-        
-        branches = {
-            'auto': ['voiture', 'auto', 'véhicule', 'automobile', 'moto', 'scooter'],
-            'habitation': ['maison', 'logement', 'appartement', 'habitation', 'domicile'],
-            'santé': ['santé', 'médical', 'maladie', 'hospitalisation', 'soins'],
-            'vie': ['vie', 'décès', 'capital', 'épargne', 'retraite'],
-            'voyage': ['voyage', 'vacances', 'étranger', 'rapatriement']
-        }
-        
-        for branche, mots_cles in branches.items():
-            if any(mot in contenu_lower for mot in mots_cles):
-                return branche.title()
-        
-        return None
     
     def classifier_email(self, contenu: str) -> TypeReponse:
         """Classifie le type de réponse attendu"""
@@ -532,53 +253,6 @@ class AgentEmailBHAssurance:
         self.graphique = self.construire_graphique()
         
         # Charger les données Q&A
-        self.charger_donnees_qa()
-    
-    def charger_donnees_qa(self):
-        """Charge les données Q&A d'assurance française dans la base"""
-        donnees_qa = [
-            ("Généralités", "Définitions", "Qu'est-ce qu'une prime d'assurance ?", 
-             "La prime d'assurance est la somme que vous payez régulièrement à la compagnie d'assurance pour bénéficier de la couverture prévue dans votre contrat."),
-            ("Généralités", "Définitions", "Qu'est-ce qu'une franchise ?", 
-             "La franchise est la partie du sinistre restée à votre charge. Par exemple, si la franchise est de 200 DT et le sinistre de 1 000 DT, l'assurance vous indemnisera 800 DT."),
-            ("Auto", "RC", "Que couvre la garantie Vol ?", 
-             "Elle indemnise la perte du véhicule ou les dommages dus à une tentative de vol (effraction, bris de serrure, câbles arrachés)."),
-            ("Habitation", "Incendie", "Que couvre la garantie incendie habitation ?", 
-             "Les dommages matériels causés par un incendie, une explosion ou la foudre."),
-            ("Santé", "Soins médicaux", "Est-ce que les consultations chez un généraliste sont remboursées ?", 
-             "Oui, dans la limite des plafonds fixés au contrat."),
-            ("Auto", "Tous risques", "Que couvre l'assurance tous risques auto ?",
-             "Elle couvre tous les dommages subis par votre véhicule, qu'ils soient dus à un accident, un vol, un incendie, ou des actes de vandalisme."),
-            ("Habitation", "Vol", "Ma garantie vol habitation couvre-t-elle les bijoux ?",
-             "Oui, mais généralement avec un plafond spécifique. Il est recommandé de faire expertiser vos bijoux de valeur."),
-            ("Santé", "Hospitalisation", "L'hospitalisation est-elle prise en charge intégralement ?",
-             "Cela dépend de votre niveau de couverture. Nos formules Premium couvrent 100% des frais d'hospitalisation."),
-            ("Vie", "Capital décès", "Comment fonctionne le capital décès ?",
-             "En cas de décès de l'assuré, le capital prévu au contrat est versé aux bénéficiaires désignés."),
-            ("Voyage", "Rapatriement", "Que couvre l'assurance rapatriement ?",
-             "Elle couvre les frais de transport sanitaire vers un hôpital approprié ou vers votre domicile en cas d'accident ou de maladie grave à l'étranger.")
-        ]
-        
-        conn = self.db_manager.obtenir_connexion()
-        cursor = conn.cursor()
-        
-        try:
-            for branche, garantie, question, reponse in donnees_qa:
-                cursor.execute('''
-                    INSERT INTO qa_assurance (branche, garantie, question, reponse)
-                    VALUES (%s, %s, %s, %s)
-                    ON CONFLICT DO NOTHING
-                ''', (branche, garantie, question, reponse))
-            
-            conn.commit()
-            logger.info("Données Q&A chargées en PostgreSQL")
-            
-        except Exception as e:
-            conn.rollback()
-            logger.error(f"Erreur chargement Q&A: {e}")
-        finally:
-            cursor.close()
-            conn.close()
     
     def construire_graphique(self):
         """Construit le graphique LangGraph pour l'agent"""
@@ -606,21 +280,15 @@ class AgentEmailBHAssurance:
         type_reponse = self.classificateur.classifier_email(etat['email_contenu'])
         etat['type_reponse'] = type_reponse
         
-        # Détecter la branche d'assurance
-        branche = self.classificateur.detecter_branche_assurance(etat['email_contenu'])
-        etat['branche_assurance'] = branche
-        
         # Déterminer le statut
         if type_reponse == TypeReponse.INTERESSE:
             etat['statut_interaction'] = StatutInteraction.INTERESSE
         elif type_reponse == TypeReponse.DEMANDE_DEVIS:
             etat['statut_interaction'] = StatutInteraction.DEVIS_DEMANDE
-        elif type_reponse == TypeReponse.NON_INTERESSE:
+        else :
             etat['statut_interaction'] = StatutInteraction.NON_INTERESSE
-        else:
-            etat['statut_interaction'] = StatutInteraction.EN_COURS
         
-        logger.info(f"Type de réponse: {type_reponse.value}, Branche: {branche}")
+        logger.info(f"Type de réponse: {type_reponse.value}")
         
         return etat
     
@@ -657,9 +325,15 @@ class AgentEmailBHAssurance:
             reponse = self.llm.invoke(prompt)
             etat['reponse_ia'] = reponse.strip()
             
-            # Générer question de suivi si intéressé
-            if etat['type_reponse'] == TypeReponse.INTERESSE and etat['branche_assurance']:
-                etat['question_suivi'] = self.generer_question_suivi(etat['branche_assurance'])
+            if etat['type_reponse'] == TypeReponse.INTERESSE:
+                etat['reponse_ia'] = "Merci pour votre intérêt pour BH Assurance ! Un conseiller vous contactera sous 24h pour discuter de vos besoins spécifiques."
+            if etat['type_reponse'] == TypeReponse.NON_INTERESSE:
+                etat['reponse_ia'] = "Nous vous remercions sincèrement pour le temps que vous nous avez accordé ainsi que pour " \
+                    "l’intérêt porté à BH Assurance. Votre confiance est notre plus grande motivation et nous encourage " \
+                    "chaque jour à vous offrir des solutions d’assurance adaptées, fiables et transparentes. " \
+                    "N’hésitez pas à nous recontacter à tout moment si vos besoins évoluent ou si vous souhaitez en " \
+                    "savoir davantage sur nos produits et services. Notre équipe reste à votre disposition pour vous " \
+                    "accompagner et vous conseiller dans la protection de ce qui compte le plus pour vous."
             
             logger.info(f"Réponse générée: {reponse[:100]}...")
             
@@ -687,31 +361,38 @@ class AgentEmailBHAssurance:
         return etat
     
     def finaliser_reponse(self, etat: EtatAgent) -> EtatAgent:
-        """Finalise la réponse avec signature et question de suivi"""
+        """Finalise la réponse avec signature, question de suivi et boutons HTML"""
         logger.info("Finalisation de la réponse")
         
-        reponse_finale = etat['reponse_ia']
+        body = etat.get('reponse_ia', '')
         
-        # Ajouter question de suivi si disponible
-        if etat.get('question_suivi'):
-            reponse_finale += f"\n\n{etat['question_suivi']}"
-        
-        # Ajouter signature
-        reponse_finale += "\n\n---\nCordialement,\nVotre conseiller BH Assurance\nTél: +216 XX XXX XXX\nEmail: contact@bh-assurance.tn"
-        
-        etat['reponse_ia'] = reponse_finale
-        
+        # Construire le HTML complet
+        html_reponse = f"""
+        <html>
+            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                <div style="max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e2e2e2; border-radius: 8px;">
+                    <p>Bonjour,<br>{body}</p>
+                    <p>Cordialement,<br>Votre assistant commercial</p>
+                    <hr style="border: none; border-top: 1px solid #e2e2e2;">
+                    <br>© 2025 BH Assurance. All rights reserved.
+                </div>
+            </body>
+        </html>
+        """
+    
+        etat['reponse_ia'] = html_reponse.strip()
+    
         return etat
+
     
     def obtenir_template_prompt(self, type_reponse: TypeReponse) -> ChatPromptTemplate:
         """Obtient le template de prompt selon le type de réponse"""
         templates = {
             TypeReponse.INTERESSE: ChatPromptTemplate.from_messages([
                 SystemMessagePromptTemplate.from_template(
-                    "Vous êtes un conseiller professionnel chez BH Assurance en Tunisie. "
-                    "Le client a exprimé un intérêt pour nos services d'assurance. "
-                    "Répondez toujours en français, de manière professionnelle et engageante. "
-                    "Respectez strictement la limite de 150 mots."
+                    "Vous êtes un assistant commercial expert en assurance. "
+                    "Toujours répondre en format JSON valide et rien d'autre. "
+                    "Respectez strictement la limite de 150 mots. "
                 ),
                 HumanMessagePromptTemplate.from_template(
                     "Générez une réponse professionnelle pour ce client intéressé.\n"
@@ -722,7 +403,13 @@ class AgentEmailBHAssurance:
                     "Répondez en:\n"
                     "1. Remerciant le client pour son intérêt\n"
                     "2. Fournissant des informations spécifiques à sa demande pour l'assurance {branche}\n\n"
-                    "Maximum 150 mots. Ne signez pas le message."
+                    "Maximum 150 mots. Ne signez pas le message et n'utilisez aucune formule de politesse finale."
+                    "Format attendu :\n"
+                "{{\n"
+                '  "client": "{client_name}",\n'
+                '  "product": "{first_product}",\n'
+                '  "pitch": "Texte commercial généré ici (environ {max_words} mots)"\n'
+                "}}"
                 )
             ]),
             
@@ -730,8 +417,9 @@ class AgentEmailBHAssurance:
                 SystemMessagePromptTemplate.from_template(
                     "Vous êtes un conseiller professionnel chez BH Assurance en Tunisie. "
                     "Le client n'est pas intéressé par nos services. "
-                    "Répondez de façon respectueuse et professionnelle en français. "
-                    "Respectez strictement la limite de 80 mots."
+                    "Répondez de façon respectueuse et professionnelle *strictement en français*. "
+                    "Respectez strictement la limite de 80 mots. "
+                    "Ne terminez jamais par 'Cordialement' ou toute autre formule de politesse."
                 ),
                 HumanMessagePromptTemplate.from_template(
                     "Générez une réponse respectueuse pour ce client non intéressé.\n"
@@ -741,7 +429,7 @@ class AgentEmailBHAssurance:
                     "1. Remerciant pour le temps accordé\n"
                     "2. Laissant la porte ouverte pour l'avenir\n"
                     "3. Proposant de rester en contact pour des mises à jour occasionnelles\n\n"
-                    "Maximum 80 mots. Ton respectueux et professionnel."
+                    "Maximum 80 mots. Ne signez pas le message et ne mettez aucune formule de politesse finale."
                 )
             ]),
             
@@ -749,8 +437,9 @@ class AgentEmailBHAssurance:
                 SystemMessagePromptTemplate.from_template(
                     "Vous êtes un conseiller professionnel chez BH Assurance en Tunisie. "
                     "Le client demande un devis d'assurance. "
-                    "Répondez en français de manière professionnelle et rassurante. "
-                    "Respectez strictement la limite de 120 mots."
+                    "Répondez strictement en français de manière professionnelle et rassurante. "
+                    "Respectez strictement la limite de 120 mots. "
+                    "Ne terminez jamais par 'Cordialement' ou toute autre formule de politesse."
                 ),
                 HumanMessagePromptTemplate.from_template(
                     "Générez une réponse professionnelle pour cette demande de devis.\n"
@@ -762,7 +451,7 @@ class AgentEmailBHAssurance:
                     "2. Expliquant les informations nécessaires pour un devis précis\n"
                     "3. Proposant un rendez-vous pour évaluer ses besoins\n"
                     "4. Mentionnant que le devis est gratuit et sans engagement\n\n"
-                    "Maximum 120 mots."
+                    "Maximum 120 mots. Ne signez pas le message."
                 )
             ]),
             
@@ -770,8 +459,9 @@ class AgentEmailBHAssurance:
                 SystemMessagePromptTemplate.from_template(
                     "Vous êtes un conseiller professionnel chez BH Assurance en Tunisie. "
                     "Le client demande plus d'informations sur nos services. "
-                    "Répondez en français de manière informative et utile. "
-                    "Respectez strictement la limite de 140 mots."
+                    "Répondez strictement en français de manière informative et utile. "
+                    "Respectez strictement la limite de 140 mots. "
+                    "Ne terminez jamais par 'Cordialement' ou toute autre formule de politesse."
                 ),
                 HumanMessagePromptTemplate.from_template(
                     "Générez une réponse informative pour cette demande d'information.\n"
@@ -783,23 +473,12 @@ class AgentEmailBHAssurance:
                     "2. Utilisant le contexte produits disponible\n"
                     "3. Proposant un contact direct pour plus de détails\n"
                     "4. Restant informatif et utile\n\n"
-                    "Maximum 140 mots."
+                    "Maximum 140 mots. Ne signez pas le message et n'utilisez aucune formule de politesse finale."
                 )
             ])
         }
+        return templates[type_reponse]
         
-        return templates.get(type_reponse, templates[TypeReponse.BESOIN_INFO])
-    
-    def generer_question_suivi(self, branche: str) -> str:
-        """Génère une question de suivi appropriée"""
-        questions_suivi = {
-            'Auto': "Quel type de véhicule souhaitez-vous assurer et quelle est votre utilisation principale (quotidienne, professionnelle, loisirs) ?",
-            'Habitation': "Votre logement est-il une maison individuelle ou un appartement, et êtes-vous propriétaire ou locataire ?",
-            'Santé': "Avez-vous des besoins spécifiques en matière de soins médicaux ou souhaitez-vous une couverture familiale ?",
-            'Vie': "Cherchez-vous une assurance vie pour la protection de votre famille ou comme placement d'épargne ?",
-            'Voyage': "Voyagez-vous fréquemment ou avez-vous un voyage spécifique en vue ?"
-        }
-        return questions_suivi.get(branche, "Y a-t-il des aspects spécifiques de nos services d'assurance qui vous intéressent particulièrement ?")
     
     def formater_historique(self, historique: List[Dict]) -> str:
         """Formate l'historique de conversation"""
@@ -852,7 +531,6 @@ class AgentEmailBHAssurance:
             'message_id': msg.get('Message-ID', '')
         }
         
-        # Extraction du corps avec gestion charset
         if msg.is_multipart():
             for part in msg.walk():
                 if part.get_content_type() == "text/plain":
@@ -900,12 +578,12 @@ class AgentEmailBHAssurance:
             msg['To'] = destinataire_email
             msg['Subject'] = f"Re: {sujet}" if not sujet.startswith('Re:') else sujet
             
-            # Référence au message original
             if message_id_original:
                 msg['In-Reply-To'] = message_id_original
                 msg['References'] = message_id_original
             
-            msg.attach(MIMEText(texte_reponse, 'plain', 'utf-8'))
+            # Set content type to HTML
+            msg.attach(MIMEText(texte_reponse, 'html', 'utf-8'))
             
             with self.connecter_smtp() as server:
                 server.send_message(msg)
@@ -920,7 +598,6 @@ class AgentEmailBHAssurance:
         expediteur_email = self.extraire_email_expediteur(contenu_email['from'])
         conversation_id = self.generer_id_conversation(expediteur_email)
         
-        # Créer l'état initial pour LangGraph
         etat_initial: EtatAgent = {
             'email_contenu': contenu_email['corps'],
             'email_expediteur': expediteur_email,
@@ -1035,77 +712,11 @@ class AgentEmailBHAssurance:
                 time.sleep(self.config.get('intervalle_verification', 30))
                 
             except KeyboardInterrupt:
-                logger.info("🛑 Arrêt de l'agent par l'utilisateur")
+                logger.info("Arrêt de l'agent par l'utilisateur")
                 break
             except Exception as e:
-                logger.error(f"❌ Erreur dans la boucle de surveillance: {e}")
+                logger.error(f"Erreur dans la boucle de surveillance: {e}")
                 time.sleep(30)
-    
-    def est_email_francais(self, contenu: str) -> bool:
-        """Vérifie si l'email est en français"""
-        mots_francais = [
-            'bonjour', 'salut', 'merci', 'oui', 'non', 'assurance', 'devis', 
-            'prix', 'coût', 'intéressé', 'interessé', 'information', 'détail',
-            'voudrais', 'aimerais', 'pouvez', 'vous', 'nous', 'moi', 'je', 'il',
-            'elle', 'avoir', 'être', 'faire', 'aller', 'venir', 'voir', 'savoir',
-            'francais', 'français', 'tunisie', 'tunisia', 'dinar', 'dt'
-        ]
-        
-        contenu_lower = contenu.lower()
-        mots_trouves = sum(1 for mot in mots_francais if mot in contenu_lower)
-        
-        return mots_trouves >= 2
-    
-    def obtenir_statistiques(self) -> Dict:
-        """Obtient les statistiques de l'agent depuis PostgreSQL"""
-        conn = self.db_manager.obtenir_connexion()
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
-        
-        try:
-            # Statistiques générales
-            cursor.execute('''
-                SELECT 
-                    COUNT(*) as total_interactions,
-                    COUNT(DISTINCT expediteur_email) as clients_uniques,
-                    COUNT(CASE WHEN statut = 'interesse' THEN 1 END) as interesses,
-                    COUNT(CASE WHEN statut = 'devis_demande' THEN 1 END) as devis_demandes,
-                    COUNT(CASE WHEN statut = 'non_interesse' THEN 1 END) as non_interesses
-                FROM interactions_email
-                WHERE timestamp >= CURRENT_DATE - INTERVAL '7 days'
-            ''')
-            
-            stats = cursor.fetchone()
-            
-            # Statistiques par branche
-            cursor.execute('''
-                SELECT branche_assurance, COUNT(*) as count
-                FROM interactions_email
-                WHERE branche_assurance IS NOT NULL
-                  AND timestamp >= CURRENT_DATE - INTERVAL '7 days'
-                GROUP BY branche_assurance
-                ORDER BY count DESC
-            ''')
-            
-            stats_branches = cursor.fetchall()
-            
-            return {
-                'total_interactions': stats['total_interactions'],
-                'clients_uniques': stats['clients_uniques'],
-                'interesses': stats['interesses'],
-                'devis_demandes': stats['devis_demandes'],
-                'non_interesses': stats['non_interesses'],
-                'branches_populaires': [
-                    {'branche': row['branche_assurance'], 'count': row['count']} 
-                    for row in stats_branches
-                ]
-            }
-            
-        except Exception as e:
-            logger.error(f"Erreur récupération statistiques: {e}")
-            return {}
-        finally:
-            cursor.close()
-            conn.close()
 
 class ConfigurationAgent:
     """Configuration de l'agent email BH Assurance avec PostgreSQL"""
@@ -1138,60 +749,15 @@ class ConfigurationAgent:
             'site_web': 'www.bh-assurance.tn'
         }
 
-def installer_dependances():
-    """Affiche les dépendances requises"""
-    dependances = [
-        "psycopg2-binary>=2.9.0",
-        "langgraph>=0.1.0",
-        "langchain-ollama>=0.1.0",
-        "langchain-core>=0.1.0"
-    ]
-    
-    print("📦 Dépendances requises:")
-    for dep in dependances:
-        print(f"  - {dep}")
-    print("\nInstallez avec: pip install " + " ".join(dependances))
-
-def tester_connexion_postgresql(config: Dict) -> bool:
-    """Teste la connexion PostgreSQL"""
-    try:
-        conn = psycopg2.connect(
-            host=config['db_host'],
-            database=config['db_name'],
-            user=config['db_user'],
-            password=config['db_password'],
-            port=config['db_port']
-        )
-        cursor = conn.cursor()
-        cursor.execute('SELECT version();')
-        version = cursor.fetchone()
-        cursor.close()
-        conn.close()
-        
-        logger.info(f"✅ Connexion PostgreSQL réussie: {version[0]}")
-        return True
-        
-    except Exception as e:
-        logger.error(f"❌ Erreur connexion PostgreSQL: {e}")
-        print(f"❌ Impossible de se connecter à PostgreSQL: {e}")
-        print("Vérifiez que:")
-        print("  - PostgreSQL est installé et démarré")
-        print("  - La base 'Bh' existe")
-        print("  - L'utilisateur 'postgres' a les bonnes permissions")
-        return False
-
 def main():
     """Fonction principale pour lancer l'agent"""
     print("🏢 Agent Email BH Assurance - PostgreSQL + LangGraph Edition")
     print("=" * 60)
     
-    # Afficher les dépendances
-    installer_dependances()
     print()
     
     config = ConfigurationAgent.creer_config()
     
-    # Tester la connexion PostgreSQL
     if not tester_connexion_postgresql(config):
         return
     
@@ -1202,9 +768,7 @@ def main():
         print("🐘 Base de données PostgreSQL connectée")
         print("🤖 LangGraph configuré")
         print("📧 Surveillance des emails en cours...")
-        print("\nCommandes disponibles:")
         print("  - Ctrl+C: Arrêter l'agent")
-        print("  - Statistiques disponibles via agent.obtenir_statistiques()")
         print()
         
         agent.surveiller_emails()

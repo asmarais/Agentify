@@ -52,9 +52,7 @@ def fetch_data(page=1, page_size=5):
             return None
 
 def send_sms(phone_number, message):
-    if not is_valid_phone(phone_number):
-        st.error("Invalid phone number format. Use E.164 format (e.g., +1234567890).")
-        return
+    
     if not message:
         st.error("Message cannot be empty.")
         return
@@ -70,9 +68,6 @@ def send_sms(phone_number, message):
         st.error(f"Error sending SMS: {str(e)}")
 
 def send_whatsapp(phone_number, message):
-    if not is_valid_phone(phone_number):
-        st.error("Invalid phone number format. Use E.164 format (e.g., +1234567890).")
-        return
     if not message:
         st.error("Message cannot be empty.")
         return
@@ -146,12 +141,9 @@ if st.session_state.last_page_size != page_size:
     st.rerun()
 
 if data and data.get('pitchs'):
-    total_pages = data['total_pages']
-    total_clients = data['total_clients']
-    
-    # Ensure current_page is within valid range
-    st.session_state.current_page = min(max(1, st.session_state.current_page), total_pages)
-    
+
+    st.session_state.current_page = min(max(1, st.session_state.current_page), 50)
+
     col1, col2 = st.columns([1, 1])
    
     with col1:
@@ -160,7 +152,7 @@ if data and data.get('pitchs'):
             st.session_state.cached_data = None  # Clear cache to force refetch
             st.rerun()
     with col2:
-        if st.button("Next", disabled=(st.session_state.current_page >= total_pages), key="next_button"):
+        if st.button("Next", disabled=(st.session_state.current_page >= 50), key="next_button"):
             st.session_state.current_page = st.session_state.current_page + 1
             logger.info(f"Next button clicked: Navigating to page {st.session_state.current_page}")
             st.session_state.cached_data = None  # Clear cache to force refetch
