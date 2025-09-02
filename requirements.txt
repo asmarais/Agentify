@@ -22,9 +22,9 @@ requests
 streamlit
 pandas
 faker
+plotly
 
-# Test email
-
+# Database
 psycopg2-binary
 langgraph
 langchain-core

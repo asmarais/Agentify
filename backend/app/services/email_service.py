@@ -73,7 +73,7 @@ class EmailService:
         # Save interaction to database
         interaction = InteractionEmail(
             email_id=msg["Message-ID"] if "Message-ID" in msg else str(hash(str(msg))),
-            expediteur_email=self.email_from,
+            expediteur_email=to,
             sujet=subject,
             corps=plain_content,
             timestamp=datetime.now(),

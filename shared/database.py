@@ -200,35 +200,6 @@ class GestionnaireBaseDonnees:
             cursor.close()
             conn.close()
     
-    def obtenir_qa_par_branche(self, branche: str) -> List[Dict]:
-        """Obtient les Q&A pour une branche d'assurance"""
-        conn = self.obtenir_connexion()
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
-        
-        try:
-            cursor.execute('''
-                SELECT question, reponse, garantie
-                FROM qa_assurance
-                WHERE branche = %s
-            ''', (branche,))
-            
-            qa_list = []
-            for row in cursor.fetchall():
-                qa_list.append({
-                    'question': row['question'],
-                    'reponse': row['reponse'],
-                    'garantie': row['garantie']
-                })
-            
-            return qa_list
-            
-        except Exception as e:
-            logger.error(f"Erreur récupération Q&A: {e}")
-            return []
-        finally:
-            cursor.close()
-            conn.close()
-    
     def mettre_a_jour_statut_derniere_interaction(self, email_expediteur: str, nouveau_statut: str) -> bool:
         """Met à jour le statut de la dernière interaction"""
         conn = self.obtenir_connexion()
