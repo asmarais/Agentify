@@ -78,7 +78,6 @@ class EmailService:
             corps=plain_content,
             timestamp=datetime.now(),
             type_reponse=TypeReponse.EN_COURS,
-            reponse_ia=html_content,
             conversation_id=conversation_id or str(hash(to + subject + str(datetime.now()))),
             statut=StatutInteraction.EN_COURS
         )
@@ -109,7 +108,7 @@ class EmailService:
 
                 <a href="mailto:chatbot.bh01@gmail.com?subject=Interesse&body=Je suis intéressée"
                 style="padding:10px 20px; margin:5px; background:#4CAF50; color:white; text-decoration:none; border-radius:5px; display:inline-block;">
-                Je suis intéressée
+                Je suis intéressé(e)
                 </a>
 
                 <a href="mailto:chatbot.bh01@gmail.com?subject=Demande de devis&body=Je veux un devis"

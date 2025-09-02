@@ -6,7 +6,6 @@ import unicodedata
 import math
 import json
 
-# Initialize LLM once
 llm = OllamaLLM(model="llama3.2")
 
 def normalize_text(text: str) -> str:

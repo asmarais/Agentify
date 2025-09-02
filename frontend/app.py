@@ -4,6 +4,7 @@ import re
 import uuid
 import math
 import logging
+import urllib.parse
 
 # Configure logging for debugging
 logging.basicConfig(level=logging.INFO)
@@ -12,7 +13,9 @@ logger = logging.getLogger(__name__)
 # Set page to wide mode for full-width layout
 st.set_page_config(layout="wide")
 
+# API endpoints
 API_URL = "http://localhost:8000/api/workflow/run_workflow"
+REFINE_API_URL = "http://localhost:8000/api/workflow/run_refinement"  # Updated to match FastAPI endpoint
 SMS_API_URL = "http://localhost:8000/api/notify/send-sms"
 WHATSAPP_API_URL = "http://localhost:8000/api/notify/send-whatsapp"
 EMAIL_API_URL = "http://localhost:8000/api/notify/send-email"
@@ -35,12 +38,10 @@ def fetch_data(page=1, page_size=5):
             if response.status_code == 200:
                 data = response.json()
                 logger.info(f"Received response: {data}")
-                # Validate response data
                 data['page'] = max(1, int(data.get('page', page)))
                 data['page_size'] = max(1, int(data.get('page_size', page_size)))
                 data['total_clients'] = max(0, int(data.get('total_clients', 0)))
                 data['total_pages'] = max(1, int(data.get('total_pages', math.ceil(data['total_clients'] / data['page_size']))))
-                # Ensure returned page matches requested page
                 if data['page'] != page:
                     st.warning(f"Warning: Requested page {page}, but received page {data['page']} from backend.")
                 return data
@@ -52,7 +53,6 @@ def fetch_data(page=1, page_size=5):
             return None
 
 def send_sms(phone_number, message):
-    
     if not message:
         st.error("Message cannot be empty.")
         return
@@ -100,6 +100,28 @@ def send_email(email, subject, message):
     except Exception as e:
         st.error(f"Error sending email: {str(e)}")
 
+def refine_pitch(client_name, product, user_input, max_words=150):
+    """Send refinement request as POST with JSON body"""
+    try:
+        payload = {
+            "client_name": client_name,
+            "product": product,
+            "user_input": user_input,
+            "max_words": max_words
+        }
+        logger.info(f"Sending POST request to {REFINE_API_URL} with payload: {payload}")
+        response = requests.post(REFINE_API_URL, json=payload)
+        
+        if response.status_code == 200:
+            response_data = response.json()
+            return response_data.get("pitch", "No pitch returned")
+        else:
+            logger.error(f"Refinement API error: {response.status_code} - {response.text}")
+            return f"Failed to refine pitch: {response.status_code} - {response.text}"
+    except Exception as e:
+        logger.error(f"Error calling refinement API: {str(e)}")
+        return f"Error calling refinement API: {str(e)}"
+
 st.title("Client Recommendations UI")
 
 # Sidebar
@@ -141,7 +163,6 @@ if st.session_state.last_page_size != page_size:
     st.rerun()
 
 if data and data.get('pitchs'):
-
     st.session_state.current_page = min(max(1, st.session_state.current_page), 50)
 
     col1, col2 = st.columns([1, 1])
@@ -182,18 +203,29 @@ if data and data.get('pitchs'):
                     if msg.startswith("User:"):
                         st.chat_message("user").write(msg.replace("User: ", ""))
                     else:
-                        st.chat_message("assistant").write(msg.replace("LLM: ", ""))
+                        # Only display the pitch content, not the full response
+                        pitch_content = msg.replace("LLM: ", "")
+                        st.chat_message("assistant").write(pitch_content)
 
             # Input for refinement
             user_input = st.chat_input("Type your message to refine the pitch...", key=f"chat_input_{client_ref}")
             if user_input:
-                # Append user message
+                # Append user message to chat history
                 st.session_state[chat_key].append(f"User: {user_input}")
+
+                # Call the refinement API with POST request and JSON body
+                refined_pitch = refine_pitch(client, product, user_input, 150)
                 
-                # Simulate LLM response (replace with actual LLM API call if available)
-                refined_response = f"LLM: Here's a refined pitch based on your input '{user_input}': [Refined version of the pitch]."
-                st.session_state[chat_key].append(refined_response)
-                
+                # Check if there was an error (if refined_pitch starts with "Error" or "Failed")
+                if refined_pitch.startswith(("Error", "Failed")):
+                    st.error(refined_pitch)
+                    st.session_state[chat_key].append(f"LLM: {refined_pitch}")
+                else:
+                    # Only append the pitch content to chat history
+                    st.session_state[chat_key].append(f"LLM: {refined_pitch}")
+                    # Update the displayed pitch in the data
+                    item['pitch']['pitch'] = refined_pitch
+
                 st.rerun()
 
             # Send options
@@ -201,7 +233,6 @@ if data and data.get('pitchs'):
             st.markdown("Enter contact details to send:")
             
             with st.container():
-                # Use stable keys based on client_ref
                 email = st.text_input("Recipient Email:", key=f"email_{client_ref}")
                 if st.button("Send via Email", key=f"email_btn_{client_ref}") and email:
                     subject = f"Insurance Pitch for {client} - {product}"
@@ -214,14 +245,13 @@ if data and data.get('pitchs'):
                     send_whatsapp(whatsapp_num, item['pitch']['pitch'])
             
                 sms_num = st.text_input("Recipient SMS Number (e.g., +1234567890):", key=f"sms_{client_ref}")
+                sms_num = "+21620089888"
                 if st.button("Send via SMS", key=f"sms_btn_{client_ref}") and sms_num:
                     logger.info(f"SMS button clicked for {client_ref}")
                     send_sms(sms_num, item['pitch']['pitch'])
 else:
     st.warning("No client recommendations available or failed to load data.")
-    # Disable pagination controls when no data
     st.session_state.current_page = 1
-    st.write("Page 1 of 1 | Total Clients: 0")
     col1, col2 = st.columns([1, 1])
     with col1:
         st.button("Previous", disabled=True, key="prev_button_no_data")

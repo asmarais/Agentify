@@ -35,10 +35,10 @@ class InteractionEmail:
     corps: str
     timestamp: datetime
     type_reponse: TypeReponse
-    reponse_ia: str
     conversation_id: str
     statut: StatutInteraction
     branche_assurance: Optional[str] = None
+    reponse_ia: Optional[str] = None
 
 class GestionnaireBaseDonnees:
     """Gestionnaire de base de données PostgreSQL pour l'agent email"""
@@ -89,9 +89,9 @@ class GestionnaireBaseDonnees:
                     sujet TEXT,
                     corps TEXT,
                     type_reponse TEXT,
-                    reponse_ia TEXT,
                     statut TEXT,
                     branche_assurance TEXT,
+                    reponse_ia TEXT,
                     timestamp TIMESTAMP,
                     FOREIGN KEY (conversation_id) REFERENCES conversations (id)
                 )
@@ -144,19 +144,18 @@ class GestionnaireBaseDonnees:
             cursor.execute('''
                 INSERT INTO interactions_email 
                 (email_id, conversation_id, expediteur_email, sujet, corps, 
-                 type_reponse, reponse_ia, statut, branche_assurance, timestamp)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                 type_reponse, statut, branche_assurance, timestamp)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (email_id) DO UPDATE SET
                     type_reponse = EXCLUDED.type_reponse,
-                    reponse_ia = EXCLUDED.reponse_ia,
                     statut = EXCLUDED.statut,
                     branche_assurance = EXCLUDED.branche_assurance,
                     timestamp = EXCLUDED.timestamp
             ''', (interaction.email_id, interaction.conversation_id, 
                   interaction.expediteur_email, interaction.sujet, 
                   interaction.corps, interaction.type_reponse.value, 
-                  interaction.reponse_ia, interaction.statut.value,
-                  interaction.branche_assurance, interaction.timestamp))
+                  interaction.statut.value, interaction.branche_assurance, 
+                  interaction.timestamp))
             
             conn.commit()
             logger.info(f"Interaction sauvegardée: {interaction.expediteur_email}")
@@ -176,7 +175,7 @@ class GestionnaireBaseDonnees:
         
         try:
             cursor.execute('''
-                SELECT corps, reponse_ia, type_reponse, statut, timestamp
+                SELECT corps, type_reponse, statut, timestamp
                 FROM interactions_email
                 WHERE expediteur_email = %s
                 ORDER BY timestamp DESC
@@ -187,7 +186,6 @@ class GestionnaireBaseDonnees:
             for row in cursor.fetchall():
                 historique.append({
                     'corps': row['corps'],
-                    'reponse_ia': row['reponse_ia'],
                     'type_reponse': row['type_reponse'],
                     'statut': row['statut'],
                     'timestamp': row['timestamp']

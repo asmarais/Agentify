@@ -1,6 +1,4 @@
 from typing import TypedDict
-from app.data.data_utils import get_garanties
-
 
 class AgentState(TypedDict):
     recommendations: dict

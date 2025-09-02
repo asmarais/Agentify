@@ -1,5 +1,7 @@
 import sys
 import os
+import psycopg2
+from psycopg2.extras import RealDictCursor
 
 parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, parent_dir)  # Insert at the beginning to prioritize
@@ -40,8 +42,6 @@ from langchain_core.prompts import ChatPromptTemplate, SystemMessagePromptTempla
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Rest of your code (e.g., EtatAgent, ClassificateurEmail, etc.)...
-
 # État de l'agent LangGraph
 class EtatAgent(TypedDict):
     email_contenu: str
@@ -51,6 +51,7 @@ class EtatAgent(TypedDict):
     type_reponse: Optional[TypeReponse]
     reponse_ia: Optional[str]
     statut_interaction: Optional[StatutInteraction]
+    question_suivi: Optional[str]
     message_id: str
     branche_assurance: Optional[str]
 
@@ -251,9 +252,7 @@ class AgentEmailBHAssurance:
         
         # Construire le graphique LangGraph
         self.graphique = self.construire_graphique()
-        
-        # Charger les données Q&A
-    
+            
     def construire_graphique(self):
         """Construit le graphique LangGraph pour l'agent"""
         workflow = StateGraph(EtatAgent)
