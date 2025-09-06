@@ -9,3 +9,6 @@ class AgentState(TypedDict):
     client_conversation: List[Any]
     current_agent: str
     garanties: Dict[str, str]
+    page: int
+    page_size: int
+    type_personne: str

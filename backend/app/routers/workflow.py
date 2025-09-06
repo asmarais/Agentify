@@ -13,8 +13,6 @@ from app.data.data_utils import get_garanties
 
 router = APIRouter()
 memory_store = {}
-
-
 class PitchRequest(BaseModel):
     client_name: str
     product: str
@@ -24,7 +22,8 @@ class PitchRequest(BaseModel):
 @router.get("/run_workflow")
 async def run_workflow(
     page: int = Query(1, ge=1, description="Current page number"),
-    page_size: int = Query(5, ge=1, le=50, description="Number of clients per page")
+    page_size: int = Query(5, ge=1, le=50, description="Number of clients per page"),
+    type_personne : str = "Moral"
 ):
     state: AgentState = {
         "recommendations": {},   
@@ -34,7 +33,8 @@ async def run_workflow(
         "current_agent": "recommender",
         "garanties": get_garanties(),
         "page": page,
-        "page_size": page_size
+        "page_size": page_size,
+        "type_personne" : type_personne
     }
 
     try:

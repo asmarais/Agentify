@@ -78,6 +78,52 @@ st.markdown("""
         border-radius: 8px;
         padding: 10px;
     }
+    
+    /* Scrollable container for products */
+    .scrollable-products {
+        max-height: 200px;
+        overflow-y: auto;
+        padding: 15px;
+        border: 1px solid #444;
+        border-radius: 8px;
+        background-color: #2C2C2C;
+        margin: 10px 0;
+    }
+    
+    .product-item {
+        background-color: #3C3C3C;
+        border-radius: 6px;
+        padding: 10px;
+        margin: 8px 0;
+        border-left: 3px solid #FF4B4B;
+    }
+    
+    .product-name {
+        font-weight: 600;
+        color: #FF4B4B;
+        margin-bottom: 5px;
+    }
+    
+    .product-score {
+        color: #A0A0A0;
+        font-size: 0.9em;
+    }
+    
+    /* Pitch display container */
+    .pitch-container {
+        background-color: #2C2C2C;
+        padding: 20px;
+        border-radius: 8px;
+        border-left: 4px solid #FF4B4B;
+        margin: 15px 0;
+        line-height: 1.6;
+    }
+    
+    .pitch-title {
+        color: #FF4B4B;
+        font-weight: 600;
+        margin-bottom: 10px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -93,6 +139,9 @@ DASHBOARD_API_URL = "http://localhost:8000/api/dashboard"
 INTERACTIONS_API_URL = "http://localhost:8000/api/dashboard/interactions"
 STATS_API_URL = f"{DASHBOARD_API_URL}/stats"
 
+# Pagination constants
+MAX_PAGES = 50  # Maximum number of pages allowed
+
 def is_valid_email(email):
     pattern = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
     return bool(re.match(pattern, email))
@@ -102,21 +151,23 @@ def is_valid_phone(phone):
     pattern = r'^\+\d{10,15}$'
     return bool(re.match(pattern, phone))
 
-def fetch_data(page=1, page_size=5):
+def fetch_data(page=1, page_size=5, type_personne="Physique"):
     with st.spinner("Fetching client recommendations..."):
         try:
-            page = max(1, int(page))
-            #logger.info(f"Sending request to {API_URL}?page={page}&page_size={page_size}")
-            response = requests.get(API_URL, params={"page": page, "page_size": page_size})
+            page = max(1, min(page, MAX_PAGES))  # Ensure page is within bounds
+            response = requests.get(API_URL, params={"page": page, "page_size": page_size, "type_personne": type_personne})
             if response.status_code == 200:
                 data = response.json()
-                #logger.info(f"Received response: {data}")
-                data['client'] = max(1, int(data.get('client', page)))
+                # Ensure the response has the correct page value
+                data['page'] = max(1, int(data.get('page', page)))
                 data['page_size'] = max(1, int(data.get('page_size', page_size)))
-                data['total_clients'] = max(0, int(data.get('total_clients', 0)))
-                data['total_pages'] = max(1, int(data.get('total_pages', math.ceil(data['total_clients'] / data['page_size']))))
-                if data['client'] != page:
-                    st.warning(f"Warning: Requested page {page}, but received page {data['client']} from backend.")
+                
+                # Set maximum pages if not provided by backend
+                if 'total_pages' not in data:
+                    data['total_pages'] = MAX_PAGES
+                
+                if data['page'] != page:
+                    st.warning(f"Warning: Requested page {page}, but received page {data['page']} from backend.")
                 return data
             else:
                 st.error(f"Failed to fetch data: {response.status_code} - {response.text}")
@@ -173,9 +224,15 @@ def send_email(email, subject, message):
     except Exception as e:
         st.error(f"Error sending email: {str(e)}")
 
-def refine_pitch(client_name, product, user_input, max_words=150):
+def refine_pitch(client_name, products, user_input, max_words=150):
     """Send refinement request as POST with JSON body"""
     try:
+        # Handle products properly - extract first product or concatenate all
+        if isinstance(products, list) and len(products) > 0:
+            product = products[0].get("product", "Insurance Product") if isinstance(products[0], dict) else str(products[0])
+        else:
+            product = str(products)
+            
         payload = {
             "client_name": client_name,
             "product": product,
@@ -199,13 +256,18 @@ def refine_pitch(client_name, product, user_input, max_words=150):
 def fetch_interactions(page=1, page_size=20, **filters):
     """Récupère les interactions avec pagination et filtres"""
     try:
+        page = max(1, min(page, MAX_PAGES))  # Ensure page is within bounds
         params = {
             "page": page,
             "page_size": page_size
         }
         response = requests.get(INTERACTIONS_API_URL, params=params)
         if response.status_code == 200:
-            return response.json()
+            data = response.json()
+            # Set maximum pages if not provided by backend
+            if 'pagination' in data and 'total_pages' not in data['pagination']:
+                data['pagination']['total_pages'] = MAX_PAGES
+            return data
         else:
             st.error(f"Erreur lors de la récupération des données: {response}")
             return None
@@ -256,7 +318,6 @@ def display_stats_cards(stats):
             value=quote_requests
         )
 
-
 def display_interactions_table(data):
     """Affiche le tableau des interactions"""
     if not data or not data.get("interactions"):
@@ -273,7 +334,6 @@ def display_interactions_table(data):
         df['timestamp'] = pd.to_datetime(df['timestamp']).dt.strftime('%d/%m/%Y %H:%M')
         
         # Traduire les statuts et types
-        
         type_translation = {
             "interesse": "✅ Intéressé",
             "non_interesse": "❌ Non Intéressé",
@@ -321,24 +381,25 @@ def show_dashboard():
     if 'dashboard_page' not in st.session_state:
         st.session_state.dashboard_page = 1
     
+    # Ensure dashboard page is within bounds
+    st.session_state.dashboard_page = max(1, min(st.session_state.dashboard_page, MAX_PAGES))
     
     # Récupérer les interactions
     data = fetch_interactions(
         page=st.session_state.dashboard_page,
         page_size=page_size,
     )
-
-    print("intr", data)
     
     if data:
         pagination = data.get("pagination", {})
+        total_pages = pagination.get("total_pages", MAX_PAGES)
+        current_page = pagination.get("page", st.session_state.dashboard_page)
         
-        # Afficher les informations de pagination
-        st.info(f"Page {pagination.get('page', 1)} sur {pagination.get('total_pages', 1)} "
-                f"({pagination.get('total_items', 0)} interactions au total)")
+        # Display pagination info
+        st.info(f"📄 Page {current_page} sur {total_pages} (max {MAX_PAGES})")
         
         # Boutons de navigation
-        col1, col2, col3 = st.columns([1, 2, 1])
+        col1, col2, col3 = st.columns([1, 4, 1])
         
         with col1:
             if st.button("⬅️ Précédent", disabled=st.session_state.dashboard_page <= 1, key="dash_prev"):
@@ -346,7 +407,9 @@ def show_dashboard():
                 st.rerun()
         
         with col3:
-            if st.button("➡️ Suivant", disabled=st.session_state.dashboard_page >= pagination.get('total_pages', 1), key="dash_next"):
+            # Disable next button if at max pages or no more data
+            disable_next = (st.session_state.dashboard_page >= total_pages) or (st.session_state.dashboard_page >= MAX_PAGES)
+            if st.button("➡️ Suivant", disabled=disable_next, key="dash_next"):
                 st.session_state.dashboard_page += 1
                 st.rerun()
         
@@ -356,168 +419,297 @@ def show_dashboard():
     if st.button("🔄 Rafraîchir les données"):
         st.rerun()
 
+def display_scrollable_products(products):
+    """Display products in a scrollable container"""
+    st.subheader("📦 Produits Recommandés")
+    
+    # Create a container with fixed height for scrolling
+    with st.container(height=250, border=True):
+        if isinstance(products, list):
+            for i, product in enumerate(products):
+                if isinstance(product, dict):
+                    product_name = product.get("product", "N/A")
+                    product_score = product.get("final_score", "N/A")
+                    
+                    # Create a styled container for each product
+                    with st.container():
+                        col1, col2 = st.columns([4, 1])
+                        with col1:
+                            st.markdown(f"**{product_name}**")
+                        with col2:
+                            st.markdown(f"`{product_score:.3f}`")
+                else:
+                    st.markdown(f"**{product}**")
+                
+                # Add separator between products (except for the last one)
+                if i < len(products) - 1:
+                    st.divider()
+        else:
+            st.markdown(f"**{products}**")
+
+def display_pitch(pitch_text, title="💬 Pitch Commercial"):
+    """Display pitch in a styled container"""
+    st.subheader(title)
+    st.info(pitch_text)
+
+def get_top_product(products):
+    """Extract the top product from products list/dict"""
+    if isinstance(products, list) and len(products) > 0:
+        if isinstance(products[0], dict):
+            return products[0].get("product", "N/A")
+        else:
+            return str(products[0])
+    elif isinstance(products, dict):
+        return products.get("product", "N/A")
+    else:
+        return str(products) if products != "N/A" else "N/A"
 
 def show_recommendations():
     """Affiche la page des recommandations clients"""
     st.title("BH Assurance")
 
-    # Session state initialization
-    if 'current_page' not in st.session_state:
-        st.session_state.current_page = 1
-    if 'last_page_size' not in st.session_state:
-        st.session_state.last_page_size = 5
-    if 'cached_data' not in st.session_state:
-        st.session_state.cached_data = None
-    if 'last_fetched_page' not in st.session_state:
-        st.session_state.last_fetched_page = None
-    if 'last_fetched_page_size' not in st.session_state:
-        st.session_state.last_fetched_page_size = None
+    # Add tabs for Moral and Physique person types
+    tab1, tab2 = st.tabs(["👤 Particuliers (Physique)", "🏢 Entreprises (Moral)"])
+    
+    with tab1:
+        show_recommendations_for_type("Physique")
+    
+    with tab2:
+        show_recommendations_for_type("Moral")
+
+def show_recommendations_for_type(type_personne):
+    """Affiche les recommandations pour un type de personne spécifique"""
+    
+    # Create unique session state keys for each type
+    current_page_key = f'current_page_{type_personne}'
+    last_page_size_key = f'last_page_size_{type_personne}'
+    cached_data_key = f'cached_data_{type_personne}'
+    last_fetched_page_key = f'last_fetched_page_{type_personne}'
+    last_fetched_page_size_key = f'last_fetched_page_size_{type_personne}'
+
+    # Session state initialization for this type
+    if current_page_key not in st.session_state:
+        st.session_state[current_page_key] = 1
+    if last_page_size_key not in st.session_state:
+        st.session_state[last_page_size_key] = 5
+    if cached_data_key not in st.session_state:
+        st.session_state[cached_data_key] = None
+    if last_fetched_page_key not in st.session_state:
+        st.session_state[last_fetched_page_key] = None
+    if last_fetched_page_size_key not in st.session_state:
+        st.session_state[last_fetched_page_size_key] = None
+
+    # Ensure current page is within bounds
+    st.session_state[current_page_key] = max(1, min(st.session_state[current_page_key], MAX_PAGES))
 
     # Page size from sidebar
     page_size = st.session_state.get('page_size', 5)
 
     # Fetch data only when necessary
     should_fetch = (
-        st.session_state.cached_data is None or
-        st.session_state.last_fetched_page != st.session_state.current_page or
-        st.session_state.last_fetched_page_size != page_size
+        st.session_state[cached_data_key] is None or
+        st.session_state[last_fetched_page_key] != st.session_state[current_page_key] or
+        st.session_state[last_fetched_page_size_key] != page_size
     )
 
     if should_fetch:
-        st.session_state.cached_data = fetch_data(st.session_state.current_page, page_size)
-        st.session_state.last_fetched_page = st.session_state.current_page
-        st.session_state.last_fetched_page_size = page_size
+        st.session_state[cached_data_key] = fetch_data(st.session_state[current_page_key], page_size, type_personne)
+        st.session_state[last_fetched_page_key] = st.session_state[current_page_key]
+        st.session_state[last_fetched_page_size_key] = page_size
 
-    data = st.session_state.cached_data
+    data = st.session_state[cached_data_key]
 
-    # Reset current_page to 1 when page_size changes
-    if st.session_state.last_page_size != page_size:
-        st.session_state.current_page = 1
-        st.session_state.last_page_size = page_size
-        st.session_state.cached_data = None  # Clear cache to force refetch
+    if st.session_state[last_page_size_key] != page_size:
+        st.session_state[current_page_key] = 1
+        st.session_state[last_page_size_key] = page_size
+        st.session_state[cached_data_key] = None
         st.rerun()
 
     if data and data.get('pitchs'):
-        st.session_state.current_page = min(max(1, st.session_state.current_page), 50)
+        # Get total pages from data or use MAX_PAGES as fallback
+        total_pages = data.get('total_pages', MAX_PAGES)
+        current_page = data.get('page', st.session_state[current_page_key])
+        
+        # Ensure current page doesn't exceed total pages or max pages
+        max_allowed_page = min(total_pages, MAX_PAGES)
+        st.session_state[current_page_key] = min(max(1, st.session_state[current_page_key]), max_allowed_page)
+
+        # Display navigation info
+        st.info(f"📄 Page {current_page} sur {total_pages} (max {MAX_PAGES}) - {type_personne}")
 
         col1, col2 = st.columns([1, 1])
        
         with col1:
-            if st.button("Previous", disabled=(st.session_state.current_page <= 1), key="prev_button"):
-                st.session_state.current_page = st.session_state.current_page - 1
-                st.session_state.cached_data = None  # Clear cache to force refetch
+            if st.button("⬅️ Précédent", disabled=(st.session_state[current_page_key] <= 1), key=f"prev_button_{type_personne}"):
+                st.session_state[current_page_key] = st.session_state[current_page_key] - 1
+                st.session_state[cached_data_key] = None
                 st.rerun()
         with col2:
-            if st.button("Next", disabled=(st.session_state.current_page >= 50), key="next_button"):
-                st.session_state.current_page = st.session_state.current_page + 1
-                logger.info(f"Next button clicked: Navigating to page {st.session_state.current_page}")
-                st.session_state.cached_data = None  # Clear cache to force refetch
+            # Disable next button if at max allowed page
+            disable_next = (st.session_state[current_page_key] >= max_allowed_page)
+            if st.button("➡️ Suivant", disabled=disable_next, key=f"next_button_{type_personne}"):
+                st.session_state[current_page_key] = st.session_state[current_page_key] + 1
+                logger.info(f"Next button clicked: Navigating to page {st.session_state[current_page_key]} for {type_personne}")
+                st.session_state[cached_data_key] = None
                 st.rerun()
 
         # Display cards in full-width layout
         for idx, item in enumerate(data.get('pitchs', [])):
             client_ref = item.get('ref_personne', f'client_{idx}')
             client = item.get('client_name', 'N/A')
-            product = item.get('recommendations', 'N/A')
-            profession = item.get('LIB_SECTEUR_ACTIVITE', 'N/A')
-            secteur = item.get('LIB_ACTIVITE', 'N/A')
-            pitch_text = item.get('pitch', 'N/A')
+            products = item.get('recommendations', 'N/A')
+            original_pitch = item.get('pitch', 'N/A')
+            
+            # Handle different fields based on type_personne
+            if type_personne == "Moral":
+                profession = item.get('LIB_SECTEUR_ACTIVITE')
+                secteur = item.get('LIB_ACTIVITE')
+                title_info = f"💼 {profession} | 🏢 {secteur}"
+            else:
+                profession = item.get('profession')
+                age = item.get('age')
+                sexe = item.get('sexe')
+                title_info = f"💼 {profession} | 🎂 {age} ans | {'👨' if sexe in ['M', 'Homme', 'Male'] else '👩' if sexe in ['F', 'Femme', 'Female'] else '👤'} {sexe}"
+            
+            # Get top product for display
+            top_product = get_top_product(products)
             
             # Create unique key for this item
-            unique_key = f"{client_ref}_{idx}"
+            unique_key = f"{type_personne}_{client_ref}_{idx}"
             
-            with st.expander(f"👤 {client} | 💼 {profession} | 🏢 {secteur} | 📦 {product}", expanded=False):
+            with st.expander(f"👤 {client} | {title_info} | 📦 {top_product}", expanded=False):
                 # Client Information Section
                 st.subheader("📋 Informations Client")
-                col1, col2, col3 = st.columns(3)
                 
-                with col1:
-                    st.metric("🔍 Référence", client_ref)
-                    st.metric("👤 Raison Sociale", client)
+                if type_personne == "Moral":
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        st.metric("🔍 Référence", client_ref)
+                        st.metric("🏢 Raison Sociale", client)
 
-                with col2:
-                    st.metric("💼 Libellé Secteur", profession)
-                    st.metric("🏢 Secteur d'Activité", secteur)
+                    with col2:
+                        st.metric("💼 Libellé Secteur", profession)
+                        st.metric("🏢 Secteur d'Activité", secteur)
 
-                with col3:
-                    st.metric("📦 Top produit Recommandé", product)
+                    with col3:
+                        st.metric("📦 Top produit Recommandé", top_product)
+                else:
+                    # Extract age and gender for particuliers
+                    age = item.get('age', item.get('AGE', 'N/A'))
+                    sexe = item.get('sexe', item.get('SEXE', 'N/A'))
+                    
+                    col1, col2, col3, col4 = st.columns(4)
+                    
+                    with col1:
+                        st.metric("🔍 Référence", client_ref)
+                        st.metric("👤 Nom", client)
+
+                    with col2:
+                        st.metric("💼 Profession", profession)
+                        st.metric("🎂 Âge", f"{age} ans" if age != 'N/A' else 'N/A')
+
+                    with col3:
+                        # Display gender with appropriate icon
+                        gender_display = "👨 Homme" if sexe in ['M', 'Homme', 'Male'] else "👩 Femme" if sexe in ['F', 'Femme', 'Female'] else f"👤 {sexe}"
+                        st.metric("⚤ Sexe", gender_display)
+
+                    with col4:
+                        st.metric("📦 Top produit Recommandé", top_product)
                 
                 st.divider()
                 
-                st.markdown("**🎯 Recommandations:**")
-                st.write(product)
-                
-                st.markdown("**💬 Pitch Commercial:**")
-                st.write(pitch_text)
+                # Use scrollable container for products
+                display_scrollable_products(products)
 
-                # Refine pitch section (chat-like interface)
-                st.subheader("🤖 Discuss and Refine Pitch with LLM")
+                # Initialize chat history and current pitch for this client
                 chat_key = f"chat_history_{unique_key}"
+                current_pitch_key = f"current_pitch_{unique_key}"
+                
                 if chat_key not in st.session_state:
                     st.session_state[chat_key] = []
+                if current_pitch_key not in st.session_state:
+                    st.session_state[current_pitch_key] = original_pitch
 
+                # Display current pitch
+                display_pitch(st.session_state[current_pitch_key])
+
+                # Refine pitch section (chat-like interface)
+                st.subheader("🤖 Discuter et Affiner le Pitch avec l'IA")
+                
                 # Display chat history
                 chat_container = st.container(border=True)
                 with chat_container:
-                    for msg in st.session_state[chat_key]:
-                        if msg.startswith("User:"):
-                            st.chat_message("user").write(msg.replace("User: ", ""))
-                        else:
-                            # Extract only the pitch content from the response
-                            pitch_content = msg.replace("LLM: ", "")
-                            st.chat_message("assistant").write(pitch_content)
+                    if st.session_state[chat_key]:
+                        for msg in st.session_state[chat_key]:
+                            if msg.startswith("User:"):
+                                st.chat_message("user").write(msg.replace("User: ", ""))
+                            else:
+                                # Extract only the pitch content from the response
+                                pitch_content = msg.replace("LLM: ", "")
+                                st.chat_message("assistant").write(pitch_content)
+                    else:
+                        st.info("💡 Commencez une conversation pour affiner le pitch selon vos besoins.")
 
                 # Input for refinement
-                user_input = st.chat_input("Type your message to refine the pitch...", key=f"chat_input_{unique_key}")
+                user_input = st.chat_input("Tapez votre message pour affiner le pitch...", key=f"chat_input_{unique_key}")
                 if user_input:
+                    # Add user message to chat history
                     st.session_state[chat_key].append(f"User: {user_input}")
+                    
+                    # Show the current pitch first if it's the first interaction
+                    if len(st.session_state[chat_key]) == 1:
+                        st.session_state[chat_key].insert(0, f"LLM: {st.session_state[current_pitch_key]}")
 
-                    refined_pitch_response = refine_pitch(client, product, user_input, 150)
+                    # Show loading spinner while refining
+                    with st.spinner("🔄 Affinage du pitch en cours..."):
+                        refined_pitch_response = refine_pitch(client, products, user_input, 150)
 
-                    print("call refinment api", refined_pitch_response)
+                    print("call refinement api", refined_pitch_response)
                     
                     if refined_pitch_response.startswith(("Error", "Failed")):
                         st.error(refined_pitch_response)
-                        st.session_state[chat_key].append(f"LLM: {refined_pitch_response}")
+                        st.session_state[chat_key].append(f"LLM: ❌ {refined_pitch_response}")
                     else:
                         # Store just the pitch content in chat history
                         st.session_state[chat_key].append(f"LLM: {refined_pitch_response}")
                         
-                        # Update the displayed pitch in the data
-                        item['pitch'] = refined_pitch_response
+                        # Update the current pitch
+                        st.session_state[current_pitch_key] = refined_pitch_response
 
                     st.rerun()
 
                 # Send options
-                st.subheader("📤 Send Pitch")
-                st.markdown("Enter contact details to send:")
+                st.subheader("📤 Envoyer le Pitch")
+                st.markdown("Entrez les coordonnées de contact pour envoyer:")
+                
+                # Get the current pitch to send
+                current_pitch_to_send = st.session_state[current_pitch_key]
                 
                 with st.container():
-                    email = st.text_input("📧 Recipient Email:", key=f"email_{unique_key}")
-                    if st.button("📧 Send via Email", key=f"email_btn_{unique_key}") and email:
-                        subject = f"Insurance Pitch for {client} - {product}"
+                    email = st.text_input("📧 Email du destinataire:", key=f"email_{unique_key}")
+                    if st.button("📧 Envoyer par Email", key=f"email_btn_{unique_key}") and email:
+                        subject = f"Proposition d'Assurance pour {client} - {top_product}"
                         logger.info(f"Email button clicked for {unique_key}")
-                        send_email(email, subject, pitch_text)
+                        send_email(email, subject, current_pitch_to_send)
                 
-                    whatsapp_num = st.text_input("📱 Recipient WhatsApp Number (e.g., +1234567890):", key=f"whatsapp_{unique_key}")
-                    if st.button("📱 Send via WhatsApp", key=f"whatsapp_btn_{unique_key}") and whatsapp_num:
+                    whatsapp_num = st.text_input("📱 Numéro WhatsApp (ex: +1234567890):", key=f"whatsapp_{unique_key}")
+                    if st.button("📱 Envoyer via WhatsApp", key=f"whatsapp_btn_{unique_key}") and whatsapp_num:
                         logger.info(f"WhatsApp button clicked for {unique_key}")
-                        send_whatsapp(whatsapp_num, pitch_text)
+                        send_whatsapp(whatsapp_num, current_pitch_to_send)
                 
-                    sms_num = st.text_input("💬 Recipient SMS Number (e.g., +1234567890):", key=f"sms_{unique_key}")
-                    sms_num = "+21620089888"
-                    if st.button("💬 Send via SMS", key=f"sms_btn_{unique_key}") and sms_num:
+                    sms_num = st.text_input("💬 Numéro SMS (ex: +1234567890):", key=f"sms_{unique_key}")
+                    if st.button("💬 Envoyer via SMS", key=f"sms_btn_{unique_key}") and sms_num:
                         logger.info(f"SMS button clicked for {unique_key}")
-                        send_sms(sms_num, pitch_text)
+                        send_sms(sms_num, current_pitch_to_send)
     else:
-        st.warning("No client recommendations available or failed to load data.")
-        st.session_state.current_page = 1
+        st.warning(f"Aucune recommandation client disponible pour les {type_personne.lower()} ou échec du chargement des données.")
+        
         col1, col2 = st.columns([1, 1])
         with col1:
-            st.button("Previous", disabled=True, key="prev_button_no_data")
+            st.button("⬅️ Précédent", disabled=True, key=f"prev_button_no_data_{type_personne}")
         with col2:
-            st.button("Next", disabled=True, key="next_button_no_data")
-        
+            st.button("➡️ Suivant", disabled=True, key=f"next_button_no_data_{type_personne}")
 
 # Main application logic
 def main():
