@@ -89,30 +89,18 @@ async def pitch_generation_node(state: AgentState, style: str = "professionnel",
             first_product=first_product,
             garantie=garantie_text
         )
+        test=False
+        while(test==False):
+            pitch_text = await llm.ainvoke(formatted_prompt.to_messages())
 
-        pitch_text = await llm.ainvoke(formatted_prompt.to_messages())
+            cleaned_output = str(pitch_text).strip()
+            if cleaned_output.startswith("```"):
+                cleaned_output = cleaned_output.strip("`").replace("json", "").strip()
 
-        cleaned_output = str(pitch_text).strip()
-        if cleaned_output.startswith("```"):
-            cleaned_output = cleaned_output.strip("`").replace("json", "").strip()
-
-        try:
-            pitch_json = json.loads(cleaned_output)
-            # Add client data to the pitch JSON
-            pitch_json["client_data"] = {
-                "profession": client.get("PROFESSION", "N/A"),
-                "secteur_activite": client.get("SECTEUR_ACTIVITE", "N/A"),
-                "age": client.get("AGE", "N/A"),
-                "chiffre_affaires": client.get("CHIFFRE_AFFAIRES", "N/A"),
-                "localisation": client.get("LOCALISATION", "N/A"),
-                "ref_personne": client.get("REF_PERSONNE", "N/A")
-            }
-        except json.JSONDecodeError:
-            pitch_json = {
-                "client": client_name,
-                "product": first_product,
-                "pitch": "Erreur lors de la génération du pitch.",
-                "client_data": {
+            try:
+                pitch_json = json.loads(cleaned_output)
+                # Add client data to the pitch JSON
+                pitch_json["client_data"] = {
                     "profession": client.get("PROFESSION", "N/A"),
                     "secteur_activite": client.get("SECTEUR_ACTIVITE", "N/A"),
                     "age": client.get("AGE", "N/A"),
@@ -120,7 +108,22 @@ async def pitch_generation_node(state: AgentState, style: str = "professionnel",
                     "localisation": client.get("LOCALISATION", "N/A"),
                     "ref_personne": client.get("REF_PERSONNE", "N/A")
                 }
-            }
+                test=True
+            except json.JSONDecodeError:
+                test=False
+                pitch_json = {
+                    "client": client_name,
+                    "product": first_product,
+                    "pitch": "Erreur lors de la génération du pitch.",
+                    "client_data": {
+                        "profession": client.get("PROFESSION", "N/A"),
+                        "secteur_activite": client.get("SECTEUR_ACTIVITE", "N/A"),
+                        "age": client.get("AGE", "N/A"),
+                        "chiffre_affaires": client.get("CHIFFRE_AFFAIRES", "N/A"),
+                        "localisation": client.get("LOCALISATION", "N/A"),
+                        "ref_personne": client.get("REF_PERSONNE", "N/A")
+                    }
+                }
 
         pitches.append({
             "recommendations": produits_recommandes_text,
