@@ -1,11 +1,11 @@
 from typing import TypedDict
+from typing import TypedDict, Dict, List, Any
+
 
 class AgentState(TypedDict):
-    recommendations: dict
-    pitchs: dict
-    refinements: list
-    client_conversation: list
+    recommendations: Dict[str, Any]
+    pitchs: Dict[str, Any] 
+    refinements: List[Any]
+    client_conversation: List[Any]
     current_agent: str
-    garanties: dict[str, str]
-    page: int
-    page_size: int
+    garanties: Dict[str, str]

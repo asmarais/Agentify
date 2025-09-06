@@ -20,7 +20,6 @@ class PitchRequest(BaseModel):
     client_name: str
     product: str
     user_input: str
-    max_words: Optional[int] = 50
 
 # Define the prompt template
 prompt_template = ChatPromptTemplate.from_messages([
@@ -64,22 +63,10 @@ Format de réponse requis (JSON uniquement):
 ])
 
 
-"""
-messages: List[dict]
-    client_name: Optional[str]
-    user_input: Optional[str]
-    pitch: Optional[str]
-    previous_pitch: Optional[str]
-    instruction: str
-"""
-# Define the pitch refinement node
 def pitch_node(state: ChatState) -> ChatState:
     from app.data.data_utils import get_garanties
     import json
     import re
-    
-    print("=== MEMORY STATE DEBUG ===")
-    print(f"Current state keys: {state.keys()}")
     
     messages = state.get("messages", [])
     client_name = state.get("client_name", "Client")
@@ -88,11 +75,6 @@ def pitch_node(state: ChatState) -> ChatState:
     instruction = state.get("instruction", "")
     default_product = state.get("product", "")
     
-    print(f"Client: {client_name}")
-    print(f"User input: {user_input}")
-    print(f"Messages count: {len(messages)}")
-    print(f"Current pitch: {current_pitch}")
-
     # Get all available guarantees
     all_guarantees = get_garanties()
     
@@ -100,12 +82,9 @@ def pitch_node(state: ChatState) -> ChatState:
     extracted_product = extract_product_from_input(user_input, all_guarantees.keys())
     
     # Determine which product to use
-    target_product = extracted_product if extracted_product else default_product
-    print(f"Target product: {target_product}")
-    
+    target_product = extracted_product if extracted_product else default_product    
     # Get guarantees for the specific product
     product_guarantees = all_guarantees.get(target_product, "Aucune garantie disponible pour ce produit")
-    print(f"Product guarantees found: {len(str(product_guarantees))} characters")
 
     # Store conversation in memory
     conversation_key = f"{client_name}_{target_product}"
@@ -138,41 +117,26 @@ def pitch_node(state: ChatState) -> ChatState:
         product_guarantees=product_guarantees,
         previous_pitch=current_pitch
     )
+    test = False
+    while (not test):
 
     # Invoke LLM
-    llm_response = llm.invoke(prompt.to_messages())
-    print(f"LLM response length: {len(llm_response)} characters")
-
-    # Parse the response to ensure it's valid JSON
-    try:
-        # First, try to parse as direct JSON
-        response_json = json.loads(llm_response)
-        print("Successfully parsed JSON response")
-    except json.JSONDecodeError:
+        llm_response = llm.invoke(prompt.to_messages())
+        
         try:
-            # Try to extract JSON from the response using regex
-            json_match = re.search(r'\{.*\}', llm_response, re.DOTALL)
-            if json_match:
-                response_json = json.loads(json_match.group())
-                print("Successfully extracted JSON from response")
-            else:
-                raise ValueError("No JSON found in response")
-        except (json.JSONDecodeError, ValueError):
-            print("Failed to parse JSON, using fallback response")
-            response_json = {
-                "client": client_name,
-                "product": target_product,
-                "pitch": llm_response.strip()  # Use the raw response as the pitch
-            }
+            response_json = json.loads(llm_response)
+            test = True
 
-    # Add assistant response to memory
+        except json.JSONDecodeError:
+            test = False
+            print(f"LLM fail: {llm_response}")
+
     memory_store[conversation_key].append({
         "role": "assistant", 
         "content": json.dumps(response_json, ensure_ascii=False),
         "timestamp": str(__import__('datetime').datetime.now())
     })
 
-    # Update state and return new state
     new_state = state.copy()
     new_state.update({
         "messages": messages + [{"role": "assistant", "content": json.dumps(response_json, ensure_ascii=False)}],
@@ -183,9 +147,6 @@ def pitch_node(state: ChatState) -> ChatState:
         "previous_pitch": current_pitch,
         "instruction": instruction
     })
-    
-    print(f"Updated state with new pitch. Total messages: {len(new_state['messages'])}")
-    print("=== END MEMORY STATE DEBUG ===")
     
     return new_state
 
@@ -207,7 +168,6 @@ def extract_product_from_input(user_input: str, available_products) -> str:
         if product.upper() in user_input_upper:
             return product
     
-    # Look for partial matches (at least 5 characters)
     for product in available_products:
         product_words = product.upper().split()
         for word in product_words:
@@ -222,40 +182,25 @@ def create_chatbot():
     workflow.add_node("pitch", pitch_node)
     workflow.add_edge(START, "pitch")
     workflow.add_edge("pitch", END)
-    
-    # Compile with memory saver for persistence
     compiled_workflow = workflow.compile(checkpointer=memory_saver)
-    
-    print("=== CHATBOT CREATION ===")
-    print("Chatbot compiled with memory saver")
-    print(f"Current memory store keys: {list(memory_store.keys())}")
-    print("=== END CHATBOT CREATION ===")
     
     return compiled_workflow
 
-# Add a function to get memory for debugging
 def get_memory_info():
     """Get current memory information for debugging"""
-    print("=== MEMORY INFO ===")
-    print(f"Total conversations in memory: {len(memory_store)}")
+   
     for key, conversations in memory_store.items():
         print(f"Conversation {key}: {len(conversations)} messages")
         if conversations:
             last_msg = conversations[-1]
             print(f"  Last message: {last_msg.get('role', 'unknown')} at {last_msg.get('timestamp', 'unknown time')}")
-    print("=== END MEMORY INFO ===")
     return memory_store
 
-# Add a function to clear memory if needed
 def clear_memory(conversation_key=None):
     """Clear memory for a specific conversation or all conversations"""
     if conversation_key:
         if conversation_key in memory_store:
             del memory_store[conversation_key]
-            print(f"Cleared memory for conversation: {conversation_key}")
-        else:
-            print(f"No memory found for conversation: {conversation_key}")
     else:
         memory_store.clear()
-        print("Cleared all memory")
     return memory_store

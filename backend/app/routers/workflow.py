@@ -52,15 +52,9 @@ async def run_workflow(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Workflow execution failed: {str(e)}")
 
-@router.post("/run_refinement")  # Change from @router.get to @router.post
+@router.post("/run_refinement")
 async def generate_pitch(request: PitchRequest):
     try:
-        from backend.app.workflows.Reffinment_workflow import get_memory_info
-        
-        print("=== WORKFLOW ROUTER DEBUG ===")
-        print(f"Request: client={request.client_name}, product={request.product}")
-        print(f"User input: {request.user_input}")
-        
         guarantees = get_garanties()
         
         client_key = f"{request.client_name}_{request.product}"
@@ -83,7 +77,6 @@ async def generate_pitch(request: PitchRequest):
         
         chatbot = create_chatbot()
         
-        # Create thread configuration for memory persistence
         thread_config = {"configurable": {"thread_id": client_key}}
         
         print(f"Invoking chatbot with thread_id: {client_key}")
@@ -91,24 +84,11 @@ async def generate_pitch(request: PitchRequest):
         
         print(f"Chatbot result received with {len(result.get('messages', []))} messages")
         
-        response_json = {
-            "client": result.get("client_name", request.client_name),
-            "product": result.get("product", request.product),
-            "pitch": result.get("pitch", ""),
-            "messages": result.get("messages", [])
-        }
+        pitch_content = result.get("pitch", "")
+        memory_store[client_key] = pitch_content
         
-        # Store the pitch in memory
-        memory_store[client_key] = result.get("pitch", "")
-        
-        print(f"Stored pitch in memory for key: {client_key}")
-        
-        # Print memory info for debugging
-        get_memory_info()
-        
-        print("=== END WORKFLOW ROUTER DEBUG ===")
-        
-        return response_json
+        return result
+    
     except Exception as e:
         print(f"Error in workflow router: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Chatbot execution failed: {str(e)}")

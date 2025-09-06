@@ -66,19 +66,16 @@ async def pitch_generation_node(state: AgentState, style: str = "professionnel",
         produits_recommandes = client.get('top_recommendations', [])
         first_product = produits_recommandes[0].get('product', 'N/A') if produits_recommandes else 'N/A'
 
-        # Extract product names
         product_names = [normalize_text(rec.get('product', 'N/A')) for rec in produits_recommandes]
         produits_recommandes_text = ', '.join(product_names) or 'N/A'
 
-        # Extract garanties
         garantie_text = garanties_dict.get(normalize_text(first_product), "N/A")
-
-        # Extract client details
-        profession = client.get('PROFESSION', 'N/A')
+        print("test", client)
+        profession = client.get('PROFESSION') or client.get('LIB_SECTEUR_ACTIVITE', 'Client')
+        print("pref", profession)
         secteur_activite = client.get('SECTEUR_ACTIVITE', 'N/A')
         age = client.get('AGE', 'N/A')
 
-        # Format prompt
         formatted_prompt = prompt_template.format_prompt(
             style=style,
             max_words=max_words,
@@ -89,38 +86,40 @@ async def pitch_generation_node(state: AgentState, style: str = "professionnel",
             first_product=first_product,
             garantie=garantie_text
         )
+        test=False
+        while(test==False):
+            pitch_text = await llm.ainvoke(formatted_prompt.to_messages())
 
-        pitch_text = await llm.ainvoke(formatted_prompt.to_messages())
+            cleaned_output = str(pitch_text).strip()
+            if cleaned_output.startswith("```"):
+                cleaned_output = cleaned_output.strip("`").replace("json", "").strip()
 
-        cleaned_output = str(pitch_text).strip()
-        if cleaned_output.startswith("```"):
-            cleaned_output = cleaned_output.strip("`").replace("json", "").strip()
-
-        try:
-            pitch_json = json.loads(cleaned_output)
-            # Add client data to the pitch JSON
-            pitch_json["client_data"] = {
-                "profession": client.get("PROFESSION", "N/A"),
-                "secteur_activite": client.get("SECTEUR_ACTIVITE", "N/A"),
-                "age": client.get("AGE", "N/A"),
-                "chiffre_affaires": client.get("CHIFFRE_AFFAIRES", "N/A"),
-                "localisation": client.get("LOCALISATION", "N/A"),
-                "ref_personne": client.get("REF_PERSONNE", "N/A")
-            }
-        except json.JSONDecodeError:
-            pitch_json = {
-                "client": client_name,
-                "product": first_product,
-                "pitch": "Erreur lors de la génération du pitch.",
-                "client_data": {
-                    "profession": client.get("PROFESSION", "N/A"),
+            try:
+                pitch_json = json.loads(cleaned_output)
+                pitch_json["client_data"] = {
+                    "profession": client.get("LIB_SECTEUR_ACTIVITE", "N/A"),
                     "secteur_activite": client.get("SECTEUR_ACTIVITE", "N/A"),
                     "age": client.get("AGE", "N/A"),
                     "chiffre_affaires": client.get("CHIFFRE_AFFAIRES", "N/A"),
                     "localisation": client.get("LOCALISATION", "N/A"),
                     "ref_personne": client.get("REF_PERSONNE", "N/A")
                 }
-            }
+                test=True
+            except json.JSONDecodeError:
+                test=False
+                pitch_json = {
+                    "client": client_name,
+                    "product": first_product,
+                    "pitch": "Erreur lors de la génération du pitch.",
+                    "client_data": {
+                        "profession": client.get("PROFESSION", "N/A"),
+                        "secteur_activite": client.get("SECTEUR_ACTIVITE", "N/A"),
+                        "age": client.get("AGE", "N/A"),
+                        "chiffre_affaires": client.get("CHIFFRE_AFFAIRES", "N/A"),
+                        "localisation": client.get("LOCALISATION", "N/A"),
+                        "ref_personne": client.get("REF_PERSONNE", "N/A")
+                    }
+                }
 
         pitches.append({
             "recommendations": produits_recommandes_text,

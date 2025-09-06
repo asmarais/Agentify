@@ -83,14 +83,14 @@ st.markdown("""
 
 # API endpoints
 API_URL = "http://localhost:8000/api/workflow/run_workflow"
-REFINE_API_URL = "http://localhost:8000/api/workflow/run_refinement" 
+REFINE_API_URL = "http://localhost:8000/api/workflow/run_refinement"
 SMS_API_URL = "http://localhost:8000/api/notify/send-sms"
 WHATSAPP_API_URL = "http://localhost:8000/api/notify/send-whatsapp"
 EMAIL_API_URL = "http://localhost:8000/api/notify/send-email"
 
 # Dashboard API endpoints
 DASHBOARD_API_URL = "http://localhost:8000/api/dashboard"
-INTERACTIONS_API_URL = f"{DASHBOARD_API_URL}/interactions"
+INTERACTIONS_API_URL = "http://localhost:8000/api/dashboard/interactions"
 STATS_API_URL = f"{DASHBOARD_API_URL}/stats"
 
 def is_valid_email(email):
@@ -106,11 +106,11 @@ def fetch_data(page=1, page_size=5):
     with st.spinner("Fetching client recommendations..."):
         try:
             page = max(1, int(page))
-            logger.info(f"Sending request to {API_URL}?page={page}&page_size={page_size}")
+            #logger.info(f"Sending request to {API_URL}?page={page}&page_size={page_size}")
             response = requests.get(API_URL, params={"page": page, "page_size": page_size})
             if response.status_code == 200:
                 data = response.json()
-                logger.info(f"Received response: {data}")
+                #logger.info(f"Received response: {data}")
                 data['client'] = max(1, int(data.get('client', page)))
                 data['page_size'] = max(1, int(data.get('page_size', page_size)))
                 data['total_clients'] = max(0, int(data.get('total_clients', 0)))
@@ -201,14 +201,13 @@ def fetch_interactions(page=1, page_size=20, **filters):
     try:
         params = {
             "page": page,
-            "page_size": page_size,
-            **{k: v for k, v in filters.items() if v}
+            "page_size": page_size
         }
         response = requests.get(INTERACTIONS_API_URL, params=params)
         if response.status_code == 200:
             return response.json()
         else:
-            st.error(f"Erreur lors de la récupération des données: {response.status_code}")
+            st.error(f"Erreur lors de la récupération des données: {response}")
             return None
     except Exception as e:
         st.error(f"Erreur de connexion: {str(e)}")
@@ -275,8 +274,6 @@ def display_interactions_table(data):
         
         # Traduire les statuts et types
         
-
-        
         type_translation = {
             "interesse": "✅ Intéressé",
             "non_interesse": "❌ Non Intéressé",
@@ -313,27 +310,6 @@ def show_dashboard():
     """Affiche le tableau de bord des interactions"""
     st.title("Tableau de Bord des Interactions")
     
-    # Section des filtres pour les interactions
-    st.subheader("Historique des Interactions")
-    
-    with st.expander("Filtres", expanded=False):
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            email_filter = st.text_input("📧 Filtrer par email:", placeholder="exemple@email.com")
-        
-        with col2:
-            status_options = ["", "interesse", "non_interesse", "devis_demande", "en_cours", "nouveau", "ferme"]
-            status_filter = st.selectbox("📊 Filtrer par statut:", status_options)
-        
-        with col3:
-            # Dates
-            col3a, col3b = st.columns(2)
-            with col3a:
-                date_debut = st.date_input("📅 Date début:")
-            with col3b:
-                date_fin = st.date_input("📅 Date fin:")
-    
     # Pagination
     col1, col2 = st.columns([3, 1])
     with col1:
@@ -345,23 +321,14 @@ def show_dashboard():
     if 'dashboard_page' not in st.session_state:
         st.session_state.dashboard_page = 1
     
-    # Préparer les filtres
-    filters = {}
-    if email_filter:
-        filters['expediteur_email'] = email_filter
-    if status_filter:
-        filters['statut'] = status_filter
-    if 'date_debut' in locals() and date_debut:
-        filters['date_debut'] = date_debut.strftime('%Y-%m-%d')
-    if 'date_fin' in locals() and date_fin:
-        filters['date_fin'] = date_fin.strftime('%Y-%m-%d')
     
     # Récupérer les interactions
     data = fetch_interactions(
         page=st.session_state.dashboard_page,
         page_size=page_size,
-        **filters
     )
+
+    print("intr", data)
     
     if data:
         pagination = data.get("pagination", {})
@@ -389,8 +356,6 @@ def show_dashboard():
     if st.button("🔄 Rafraîchir les données"):
         st.rerun()
 
-def show_recommendations():
-    """Affiche la page des recommandations clients"""
 
 def show_recommendations():
     """Affiche la page des recommandations clients"""
@@ -457,7 +422,7 @@ def show_recommendations():
             client_data = item['pitch'].get('client_data', {})
             
             # Extract client information for display
-            profession = client_data.get('profession', 'N/A')
+            profession = client_data.get('profession')
             secteur = client_data.get('secteur_activite', 'N/A')
             age = client_data.get('age', 'N/A')
             
@@ -499,45 +464,28 @@ def show_recommendations():
                         if msg.startswith("User:"):
                             st.chat_message("user").write(msg.replace("User: ", ""))
                         else:
-                            # Extract only the pitch content from the JSON response
+                            # Extract only the pitch content from the response
                             pitch_content = msg.replace("LLM: ", "")
-                            try:
-                                # Try to parse JSON and extract pitch
-                                import json
-                                json_response = json.loads(pitch_content)
-                                actual_pitch = json_response.get("pitch", pitch_content)
-                                st.chat_message("assistant").write(actual_pitch)
-                            except (json.JSONDecodeError, ValueError):
-                                # If not JSON, display as is
-                                st.chat_message("assistant").write(pitch_content)
+                            st.chat_message("assistant").write(pitch_content)
 
                 # Input for refinement
                 user_input = st.chat_input("Type your message to refine the pitch...", key=f"chat_input_{client_ref}")
                 if user_input:
-                    # Append user message to chat history
                     st.session_state[chat_key].append(f"User: {user_input}")
 
-                    # Call the refinement API with POST request and JSON body
                     refined_pitch_response = refine_pitch(client, product, user_input, 150)
+
+                    print("call refinment api", refined_pitch_response)
                     
-                    # Check if there was an error (if refined_pitch starts with "Error" or "Failed")
                     if refined_pitch_response.startswith(("Error", "Failed")):
                         st.error(refined_pitch_response)
                         st.session_state[chat_key].append(f"LLM: {refined_pitch_response}")
                     else:
-                        # Store the full JSON response in chat history
+                        # Store just the pitch content in chat history
                         st.session_state[chat_key].append(f"LLM: {refined_pitch_response}")
                         
-                        # Extract the pitch content from JSON for updating the displayed pitch
-                        try:
-                            import json
-                            json_response = json.loads(refined_pitch_response)
-                            refined_pitch = json_response.get("pitch", refined_pitch_response)
-                            # Update the displayed pitch in the data
-                            item['pitch']['pitch'] = refined_pitch
-                        except (json.JSONDecodeError, ValueError):
-                            # If not JSON, use the raw response
-                            item['pitch']['pitch'] = refined_pitch_response
+                        # Update the displayed pitch in the data
+                        item['pitch']['pitch'] = refined_pitch_response
 
                     st.rerun()
 
