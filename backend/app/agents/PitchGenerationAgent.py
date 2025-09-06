@@ -43,13 +43,17 @@ async def pitch_generation_node(state: AgentState, style: str = "professionnel",
             "Générez un texte commercial court et professionnel pour un assureur.\n"
             "Détails du client :\n"
             "- Nom : {client_name}\n"
+            "- Profession : {profession}\n"
+            "- Secteur d'activité : {secteur_activite}\n"
+            "- Âge : {age}\n"
             "- Produit recommandé : {first_product}\n"
             "- Garanties du produit : {garantie}\n\n"
+            "Personnalisez le pitch selon la profession et le secteur d'activité du client.\n"
             "Format attendu :\n"
             "{{\n"
             '  "client": "{client_name}",\n'
             '  "product": "{first_product}",\n'
-            '  "pitch": "Texte commercial généré ici (environ {max_words} mots)"\n'
+            '  "pitch": "Texte commercial personnalisé selon la profession et le secteur (environ {max_words} mots)"\n'
             "}}"
         )
     ])
@@ -58,6 +62,7 @@ async def pitch_generation_node(state: AgentState, style: str = "professionnel",
 
     for client in page_clients:
         client_name = client.get('name') or client.get('RAISON_SOCIALE', 'Client')
+        
         produits_recommandes = client.get('top_recommendations', [])
         first_product = produits_recommandes[0].get('product', 'N/A') if produits_recommandes else 'N/A'
 
@@ -68,11 +73,19 @@ async def pitch_generation_node(state: AgentState, style: str = "professionnel",
         # Extract garanties
         garantie_text = garanties_dict.get(normalize_text(first_product), "N/A")
 
+        # Extract client details
+        profession = client.get('PROFESSION', 'N/A')
+        secteur_activite = client.get('SECTEUR_ACTIVITE', 'N/A')
+        age = client.get('AGE', 'N/A')
+
         # Format prompt
         formatted_prompt = prompt_template.format_prompt(
             style=style,
             max_words=max_words,
             client_name=client_name,
+            profession=profession,
+            secteur_activite=secteur_activite,
+            age=age,
             first_product=first_product,
             garantie=garantie_text
         )
@@ -85,11 +98,28 @@ async def pitch_generation_node(state: AgentState, style: str = "professionnel",
 
         try:
             pitch_json = json.loads(cleaned_output)
+            # Add client data to the pitch JSON
+            pitch_json["client_data"] = {
+                "profession": client.get("PROFESSION", "N/A"),
+                "secteur_activite": client.get("SECTEUR_ACTIVITE", "N/A"),
+                "age": client.get("AGE", "N/A"),
+                "chiffre_affaires": client.get("CHIFFRE_AFFAIRES", "N/A"),
+                "localisation": client.get("LOCALISATION", "N/A"),
+                "ref_personne": client.get("REF_PERSONNE", "N/A")
+            }
         except json.JSONDecodeError:
             pitch_json = {
                 "client": client_name,
                 "product": first_product,
-                "pitch": "Erreur lors de la génération du pitch."
+                "pitch": "Erreur lors de la génération du pitch.",
+                "client_data": {
+                    "profession": client.get("PROFESSION", "N/A"),
+                    "secteur_activite": client.get("SECTEUR_ACTIVITE", "N/A"),
+                    "age": client.get("AGE", "N/A"),
+                    "chiffre_affaires": client.get("CHIFFRE_AFFAIRES", "N/A"),
+                    "localisation": client.get("LOCALISATION", "N/A"),
+                    "ref_personne": client.get("REF_PERSONNE", "N/A")
+                }
             }
 
         pitches.append({

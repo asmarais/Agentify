@@ -17,9 +17,73 @@ logger = logging.getLogger(__name__)
 # Set page to wide mode for full-width layout
 st.set_page_config(layout="wide")
 
+# Custom CSS
+st.markdown("""
+<style>
+    /* Card-like containers */
+    div[data-testid="stExpander"] {
+        background-color: #1E1E1E;
+        border-radius: 10px;
+        padding: 10px;
+        margin: 10px 0;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    
+    /* Metric containers */
+    div[data-testid="stMetric"] {
+        background-color: #2C2C2C;
+        border-radius: 8px;
+        padding: 15px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    
+    /* Headers */
+    h1, h2, h3 {
+        color: #FF4B4B !important;
+        font-weight: 600;
+    }
+    
+    /* Buttons */
+    div.stButton > button {
+        background-color: #FF4B4B;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        padding: 8px 16px;
+        transition: all 0.3s ease;
+    }
+    
+    div.stButton > button:hover {
+        background-color: #E63E3E;
+        box-shadow: 0 2px 4px rgba(255, 75, 75, 0.2);
+    }
+    
+    /* Chat messages */
+    div.stChatMessage {
+        background-color: #2C2C2C;
+        border-radius: 8px;
+        padding: 10px;
+        margin: 5px 0;
+    }
+    
+    /* Sidebar */
+    div[data-testid="stSidebar"] {
+        background-color: #1E1E1E;
+        padding: 2rem 1rem;
+    }
+    
+    /* Tables */
+    div[data-testid="stTable"] {
+        background-color: #2C2C2C;
+        border-radius: 8px;
+        padding: 10px;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 # API endpoints
 API_URL = "http://localhost:8000/api/workflow/run_workflow"
-REFINE_API_URL = "http://localhost:8000/api/workflow/run_refinement"  # Updated to match FastAPI endpoint
+REFINE_API_URL = "http://localhost:8000/api/workflow/run_refinement" 
 SMS_API_URL = "http://localhost:8000/api/notify/send-sms"
 WHATSAPP_API_URL = "http://localhost:8000/api/notify/send-whatsapp"
 EMAIL_API_URL = "http://localhost:8000/api/notify/send-email"
@@ -47,12 +111,12 @@ def fetch_data(page=1, page_size=5):
             if response.status_code == 200:
                 data = response.json()
                 logger.info(f"Received response: {data}")
-                data['page'] = max(1, int(data.get('page', page)))
+                data['client'] = max(1, int(data.get('client', page)))
                 data['page_size'] = max(1, int(data.get('page_size', page_size)))
                 data['total_clients'] = max(0, int(data.get('total_clients', 0)))
                 data['total_pages'] = max(1, int(data.get('total_pages', math.ceil(data['total_clients'] / data['page_size']))))
-                if data['page'] != page:
-                    st.warning(f"Warning: Requested page {page}, but received page {data['page']} from backend.")
+                if data['client'] != page:
+                    st.warning(f"Warning: Requested page {page}, but received page {data['client']} from backend.")
                 return data
             else:
                 st.error(f"Failed to fetch data: {response.status_code} - {response.text}")
@@ -247,10 +311,10 @@ def display_interactions_table(data):
 
 def show_dashboard():
     """Affiche le tableau de bord des interactions"""
-    st.title("📊 Tableau de Bord des Interactions")
+    st.title("Tableau de Bord des Interactions")
     
     # Section des filtres pour les interactions
-    st.subheader("🔍 Historique des Interactions")
+    st.subheader("Historique des Interactions")
     
     with st.expander("Filtres", expanded=False):
         col1, col2, col3 = st.columns(3)
@@ -322,7 +386,6 @@ def show_dashboard():
         # Afficher le tableau
         display_interactions_table(data)
     
-    # Bouton de rafraîchissement
     if st.button("🔄 Rafraîchir les données"):
         st.rerun()
 
@@ -331,7 +394,7 @@ def show_recommendations():
 
 def show_recommendations():
     """Affiche la page des recommandations clients"""
-    st.title("Client Recommendations UI")
+    st.title("BH Assurance")
 
     # Session state initialization
     if 'current_page' not in st.session_state:
@@ -391,14 +454,40 @@ def show_recommendations():
             client = item['pitch']['client']
             product = item['pitch']['product']
             client_ref = item['client_ref']
-            with st.expander(f"Client: {client} - Product: {product} (Ref: {client_ref})", expanded=False):
-                st.markdown("**Recommendations:**")
+            client_data = item['pitch'].get('client_data', {})
+            
+            # Extract client information for display
+            profession = client_data.get('profession', 'N/A')
+            secteur = client_data.get('secteur_activite', 'N/A')
+            age = client_data.get('age', 'N/A')
+            
+            with st.expander(f"👤 {client} | 💼 {profession} | 🏢 {secteur} | 📦 {product}", expanded=False):
+                # Client Information Section
+                st.subheader("📋 Informations Client")
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    st.metric("👤 Nom", client)
+                    st.metric("💼 Profession", profession)
+                
+                with col2:
+                    st.metric("🏢 Secteur", secteur)
+                    st.metric("🎂 Âge", age)
+                
+                with col3:
+                    st.metric("📦 Produit", product)
+                    st.metric("🆔 Référence", client_data.get('ref_personne', client_ref))
+                
+                st.divider()
+                
+                st.markdown("**🎯 Recommandations:**")
                 st.write(item['recommendations'])
-                st.markdown("**Pitch:**")
+                
+                st.markdown("**💬 Pitch Commercial:**")
                 st.write(item['pitch']['pitch'])
 
                 # Refine pitch section (chat-like interface)
-                st.subheader("Discuss and Refine Pitch with LLM")
+                st.subheader("🤖 Discuss and Refine Pitch with LLM")
                 chat_key = f"chat_history_{client_ref}"
                 if chat_key not in st.session_state:
                     st.session_state[chat_key] = []
@@ -410,9 +499,17 @@ def show_recommendations():
                         if msg.startswith("User:"):
                             st.chat_message("user").write(msg.replace("User: ", ""))
                         else:
-                            # Only display the pitch content, not the full response
+                            # Extract only the pitch content from the JSON response
                             pitch_content = msg.replace("LLM: ", "")
-                            st.chat_message("assistant").write(pitch_content)
+                            try:
+                                # Try to parse JSON and extract pitch
+                                import json
+                                json_response = json.loads(pitch_content)
+                                actual_pitch = json_response.get("pitch", pitch_content)
+                                st.chat_message("assistant").write(actual_pitch)
+                            except (json.JSONDecodeError, ValueError):
+                                # If not JSON, display as is
+                                st.chat_message("assistant").write(pitch_content)
 
                 # Input for refinement
                 user_input = st.chat_input("Type your message to refine the pitch...", key=f"chat_input_{client_ref}")
@@ -421,39 +518,48 @@ def show_recommendations():
                     st.session_state[chat_key].append(f"User: {user_input}")
 
                     # Call the refinement API with POST request and JSON body
-                    refined_pitch = refine_pitch(client, product, user_input, 150)
+                    refined_pitch_response = refine_pitch(client, product, user_input, 150)
                     
                     # Check if there was an error (if refined_pitch starts with "Error" or "Failed")
-                    if refined_pitch.startswith(("Error", "Failed")):
-                        st.error(refined_pitch)
-                        st.session_state[chat_key].append(f"LLM: {refined_pitch}")
+                    if refined_pitch_response.startswith(("Error", "Failed")):
+                        st.error(refined_pitch_response)
+                        st.session_state[chat_key].append(f"LLM: {refined_pitch_response}")
                     else:
-                        # Only append the pitch content to chat history
-                        st.session_state[chat_key].append(f"LLM: {refined_pitch}")
-                        # Update the displayed pitch in the data
-                        item['pitch']['pitch'] = refined_pitch
+                        # Store the full JSON response in chat history
+                        st.session_state[chat_key].append(f"LLM: {refined_pitch_response}")
+                        
+                        # Extract the pitch content from JSON for updating the displayed pitch
+                        try:
+                            import json
+                            json_response = json.loads(refined_pitch_response)
+                            refined_pitch = json_response.get("pitch", refined_pitch_response)
+                            # Update the displayed pitch in the data
+                            item['pitch']['pitch'] = refined_pitch
+                        except (json.JSONDecodeError, ValueError):
+                            # If not JSON, use the raw response
+                            item['pitch']['pitch'] = refined_pitch_response
 
                     st.rerun()
 
                 # Send options
-                st.subheader("Send Pitch")
+                st.subheader("📤 Send Pitch")
                 st.markdown("Enter contact details to send:")
                 
                 with st.container():
-                    email = st.text_input("Recipient Email:", key=f"email_{client_ref}")
-                    if st.button("Send via Email", key=f"email_btn_{client_ref}") and email:
+                    email = st.text_input("📧 Recipient Email:", key=f"email_{client_ref}")
+                    if st.button("📧 Send via Email", key=f"email_btn_{client_ref}") and email:
                         subject = f"Insurance Pitch for {client} - {product}"
                         logger.info(f"Email button clicked for {client_ref}")
                         send_email(email, subject, item['pitch']['pitch'])
                 
-                    whatsapp_num = st.text_input("Recipient WhatsApp Number (e.g., +1234567890):", key=f"whatsapp_{client_ref}")
-                    if st.button("Send via WhatsApp", key=f"whatsapp_btn_{client_ref}") and whatsapp_num:
+                    whatsapp_num = st.text_input("📱 Recipient WhatsApp Number (e.g., +1234567890):", key=f"whatsapp_{client_ref}")
+                    if st.button("📱 Send via WhatsApp", key=f"whatsapp_btn_{client_ref}") and whatsapp_num:
                         logger.info(f"WhatsApp button clicked for {client_ref}")
                         send_whatsapp(whatsapp_num, item['pitch']['pitch'])
                 
-                    #sms_num = st.text_input("Recipient SMS Number (e.g., +1234567890):", key=f"sms_{client_ref}")
+                    sms_num = st.text_input("💬 Recipient SMS Number (e.g., +1234567890):", key=f"sms_{client_ref}")
                     sms_num = "+21620089888"
-                    if st.button("Send via SMS", key=f"sms_btn_{client_ref}") and sms_num:
+                    if st.button("💬 Send via SMS", key=f"sms_btn_{client_ref}") and sms_num:
                         logger.info(f"SMS button clicked for {client_ref}")
                         send_sms(sms_num, item['pitch']['pitch'])
     else:
@@ -464,20 +570,21 @@ def show_recommendations():
             st.button("Previous", disabled=True, key="prev_button_no_data")
         with col2:
             st.button("Next", disabled=True, key="next_button_no_data")
+        
 
 # Main application logic
 def main():
     # Sidebar pour la navigation
-    st.sidebar.title("🎛️ Navigation")
+    st.sidebar.title("Navigation")
     
     # Radio button pour choisir la page
     page = st.sidebar.radio(
         "Choisir une section:",
-        ["🎯 Recommandations Clients", "📊 Tableau de Bord"]
+        ["Recommandations Clients", "Tableau de Bord"]
     )
     
     # Sidebar settings (seulement pour la page recommandations)
-    if page == "🎯 Recommandations Clients":
+    if page == "Recommandations Clients":
         st.sidebar.markdown("---")
         st.sidebar.subheader("⚙️ Paramètres")
         page_size_options = [5, 10, 20]
@@ -485,9 +592,9 @@ def main():
         st.session_state.page_size = page_size
     
     # Afficher la page sélectionnée
-    if page == "🎯 Recommandations Clients":
+    if page == "Recommandations Clients":
         show_recommendations()
-    elif page == "📊 Tableau de Bord":
+    elif page == "Tableau de Bord":
         show_dashboard()
 
 if __name__ == "__main__":
