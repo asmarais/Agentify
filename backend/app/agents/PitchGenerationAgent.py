@@ -43,16 +43,13 @@ async def pitch_generation_node(state: AgentState, style: str = "professionnel",
             "Générez un texte commercial court et professionnel pour un assureur.\n"
             "Détails du client :\n"
             "- Nom : {client_name}\n"
-            "- Profession : {profession}\n"
-            "- Secteur d'activité : {secteur_activite}\n"
-            "- Âge : {age}\n"
+            "- libellé : {LIB_SECTEUR_ACTIVITE}\n"
+            "- Secteur d'activité : {LIB_ACTIVITE}\n"
             "- Produit recommandé : {first_product}\n"
             "- Garanties du produit : {garantie}\n\n"
             "Personnalisez le pitch selon la profession et le secteur d'activité du client.\n"
             "Format attendu :\n"
             "{{\n"
-            '  "client": "{client_name}",\n'
-            '  "product": "{first_product}",\n'
             '  "pitch": "Texte commercial personnalisé selon la profession et le secteur (environ {max_words} mots)"\n'
             "}}"
         )
@@ -70,24 +67,21 @@ async def pitch_generation_node(state: AgentState, style: str = "professionnel",
         produits_recommandes_text = ', '.join(product_names) or 'N/A'
 
         garantie_text = garanties_dict.get(normalize_text(first_product), "N/A")
-        print("test", client)
-        profession = client.get('PROFESSION') or client.get('LIB_SECTEUR_ACTIVITE', 'Client')
-        print("pref", profession)
-        secteur_activite = client.get('SECTEUR_ACTIVITE', 'N/A')
-        age = client.get('AGE', 'N/A')
+        profession = client.get('LIB_SECTEUR_ACTIVITE', 'Client')
+        secteur_activite = client.get('LIB_ACTIVITE', "Client")
 
         formatted_prompt = prompt_template.format_prompt(
             style=style,
             max_words=max_words,
             client_name=client_name,
-            profession=profession,
-            secteur_activite=secteur_activite,
-            age=age,
+            LIB_SECTEUR_ACTIVITE=profession,
+            LIB_ACTIVITE=secteur_activite,
             first_product=first_product,
             garantie=garantie_text
         )
-        test=False
-        while(test==False):
+        
+        test = False
+        while not test:
             pitch_text = await llm.ainvoke(formatted_prompt.to_messages())
 
             cleaned_output = str(pitch_text).strip()
@@ -95,37 +89,19 @@ async def pitch_generation_node(state: AgentState, style: str = "professionnel",
                 cleaned_output = cleaned_output.strip("`").replace("json", "").strip()
 
             try:
-                pitch_json = json.loads(cleaned_output)
-                pitch_json["client_data"] = {
-                    "profession": client.get("LIB_SECTEUR_ACTIVITE", "N/A"),
-                    "secteur_activite": client.get("SECTEUR_ACTIVITE", "N/A"),
-                    "age": client.get("AGE", "N/A"),
-                    "chiffre_affaires": client.get("CHIFFRE_AFFAIRES", "N/A"),
-                    "localisation": client.get("LOCALISATION", "N/A"),
-                    "ref_personne": client.get("REF_PERSONNE", "N/A")
-                }
-                test=True
+                pitch_json = json.loads(cleaned_output)                
+                test = True
+                pitches.append({
+                    "recommendations": produits_recommandes_text,
+                    "LIB_SECTEUR_ACTIVITE": client.get("LIB_SECTEUR_ACTIVITE"),
+                    "client_name": client_name,
+                    "LIB_ACTIVITE": client.get("LIB_ACTIVITE"),
+                    "ref_personne": client.get("REF_PERSONNE"),
+                    "pitch": pitch_json.get("pitch", "N/A")
+                })
+                
             except json.JSONDecodeError:
-                test=False
-                pitch_json = {
-                    "client": client_name,
-                    "product": first_product,
-                    "pitch": "Erreur lors de la génération du pitch.",
-                    "client_data": {
-                        "profession": client.get("PROFESSION", "N/A"),
-                        "secteur_activite": client.get("SECTEUR_ACTIVITE", "N/A"),
-                        "age": client.get("AGE", "N/A"),
-                        "chiffre_affaires": client.get("CHIFFRE_AFFAIRES", "N/A"),
-                        "localisation": client.get("LOCALISATION", "N/A"),
-                        "ref_personne": client.get("REF_PERSONNE", "N/A")
-                    }
-                }
-
-        pitches.append({
-            "recommendations": produits_recommandes_text,
-            "client_ref": client.get("REF_PERSONNE", f"client_{client_name}"),
-            "pitch": pitch_json
-        })
+                test = False
 
     return {
         **state,

@@ -415,16 +415,16 @@ def show_recommendations():
                 st.rerun()
 
         # Display cards in full-width layout
-        for item in data.get('pitchs', []):
-            client = item['pitch']['client']
-            product = item['pitch']['product']
-            client_ref = item['client_ref']
-            client_data = item['pitch'].get('client_data', {})
+        for idx, item in enumerate(data.get('pitchs', [])):
+            client_ref = item.get('ref_personne', f'client_{idx}')
+            client = item.get('client_name', 'N/A')
+            product = item.get('recommendations', 'N/A')
+            profession = item.get('LIB_SECTEUR_ACTIVITE', 'N/A')
+            secteur = item.get('LIB_ACTIVITE', 'N/A')
+            pitch_text = item.get('pitch', 'N/A')
             
-            # Extract client information for display
-            profession = client_data.get('profession')
-            secteur = client_data.get('secteur_activite', 'N/A')
-            age = client_data.get('age', 'N/A')
+            # Create unique key for this item
+            unique_key = f"{client_ref}_{idx}"
             
             with st.expander(f"👤 {client} | 💼 {profession} | 🏢 {secteur} | 📦 {product}", expanded=False):
                 # Client Information Section
@@ -432,28 +432,27 @@ def show_recommendations():
                 col1, col2, col3 = st.columns(3)
                 
                 with col1:
-                    st.metric("👤 Nom", client)
-                    st.metric("💼 Profession", profession)
-                
+                    st.metric("🔍 Référence", client_ref)
+                    st.metric("👤 Raison Sociale", client)
+
                 with col2:
-                    st.metric("🏢 Secteur", secteur)
-                    st.metric("🎂 Âge", age)
-                
+                    st.metric("💼 Libellé Secteur", profession)
+                    st.metric("🏢 Secteur d'Activité", secteur)
+
                 with col3:
-                    st.metric("📦 Produit", product)
-                    st.metric("🆔 Référence", client_data.get('ref_personne', client_ref))
+                    st.metric("📦 Top produit Recommandé", product)
                 
                 st.divider()
                 
                 st.markdown("**🎯 Recommandations:**")
-                st.write(item['recommendations'])
+                st.write(product)
                 
                 st.markdown("**💬 Pitch Commercial:**")
-                st.write(item['pitch']['pitch'])
+                st.write(pitch_text)
 
                 # Refine pitch section (chat-like interface)
                 st.subheader("🤖 Discuss and Refine Pitch with LLM")
-                chat_key = f"chat_history_{client_ref}"
+                chat_key = f"chat_history_{unique_key}"
                 if chat_key not in st.session_state:
                     st.session_state[chat_key] = []
 
@@ -469,7 +468,7 @@ def show_recommendations():
                             st.chat_message("assistant").write(pitch_content)
 
                 # Input for refinement
-                user_input = st.chat_input("Type your message to refine the pitch...", key=f"chat_input_{client_ref}")
+                user_input = st.chat_input("Type your message to refine the pitch...", key=f"chat_input_{unique_key}")
                 if user_input:
                     st.session_state[chat_key].append(f"User: {user_input}")
 
@@ -485,7 +484,7 @@ def show_recommendations():
                         st.session_state[chat_key].append(f"LLM: {refined_pitch_response}")
                         
                         # Update the displayed pitch in the data
-                        item['pitch']['pitch'] = refined_pitch_response
+                        item['pitch'] = refined_pitch_response
 
                     st.rerun()
 
@@ -494,22 +493,22 @@ def show_recommendations():
                 st.markdown("Enter contact details to send:")
                 
                 with st.container():
-                    email = st.text_input("📧 Recipient Email:", key=f"email_{client_ref}")
-                    if st.button("📧 Send via Email", key=f"email_btn_{client_ref}") and email:
+                    email = st.text_input("📧 Recipient Email:", key=f"email_{unique_key}")
+                    if st.button("📧 Send via Email", key=f"email_btn_{unique_key}") and email:
                         subject = f"Insurance Pitch for {client} - {product}"
-                        logger.info(f"Email button clicked for {client_ref}")
-                        send_email(email, subject, item['pitch']['pitch'])
+                        logger.info(f"Email button clicked for {unique_key}")
+                        send_email(email, subject, pitch_text)
                 
-                    whatsapp_num = st.text_input("📱 Recipient WhatsApp Number (e.g., +1234567890):", key=f"whatsapp_{client_ref}")
-                    if st.button("📱 Send via WhatsApp", key=f"whatsapp_btn_{client_ref}") and whatsapp_num:
-                        logger.info(f"WhatsApp button clicked for {client_ref}")
-                        send_whatsapp(whatsapp_num, item['pitch']['pitch'])
+                    whatsapp_num = st.text_input("📱 Recipient WhatsApp Number (e.g., +1234567890):", key=f"whatsapp_{unique_key}")
+                    if st.button("📱 Send via WhatsApp", key=f"whatsapp_btn_{unique_key}") and whatsapp_num:
+                        logger.info(f"WhatsApp button clicked for {unique_key}")
+                        send_whatsapp(whatsapp_num, pitch_text)
                 
-                    sms_num = st.text_input("💬 Recipient SMS Number (e.g., +1234567890):", key=f"sms_{client_ref}")
+                    sms_num = st.text_input("💬 Recipient SMS Number (e.g., +1234567890):", key=f"sms_{unique_key}")
                     sms_num = "+21620089888"
-                    if st.button("💬 Send via SMS", key=f"sms_btn_{client_ref}") and sms_num:
-                        logger.info(f"SMS button clicked for {client_ref}")
-                        send_sms(sms_num, item['pitch']['pitch'])
+                    if st.button("💬 Send via SMS", key=f"sms_btn_{unique_key}") and sms_num:
+                        logger.info(f"SMS button clicked for {unique_key}")
+                        send_sms(sms_num, pitch_text)
     else:
         st.warning("No client recommendations available or failed to load data.")
         st.session_state.current_page = 1
