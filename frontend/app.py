@@ -740,7 +740,7 @@ def show_recommendations_for_type(type_personne):
                 st.markdown("Entrez les coordonnées de contact pour envoyer:")
                 
                 # Get the current pitch to send
-                current_pitch_to_send = st.session_state[current_pitch_key]
+                current_pitch_to_send = st.session_state[current_pitch_key].lstrip()
                 
                 with st.container():
                     email = st.text_input("📧 Email du destinataire:", key=f"email_{unique_key}")
