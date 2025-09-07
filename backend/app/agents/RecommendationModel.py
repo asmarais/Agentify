@@ -27,7 +27,7 @@ def recommendation_node(state: AgentState) -> AgentState:
             start=start_idx,
             end=end_idx
         )
-    else:
+    elif state.get("type_personne") == "Physique":
         recommendations = generate_recommendations(start_idx,end_idx, df)
 
     # Normalize recommendations (handle dict vs list)

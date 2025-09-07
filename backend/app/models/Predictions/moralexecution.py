@@ -35,7 +35,7 @@ def generate_moral_recommendations(
     """
 
     # Reload the module to get the latest updates
-    importlib.reload(moral_recommendation)
+    #importlib.reload(moral_recommendation)
 
     # Setup data directory
     if base_data_dir is None:

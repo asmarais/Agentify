@@ -521,6 +521,7 @@ def display_scrollable_products(products):
                 # Add separator between products (except for the last one)
                 if i < len(products) - 1:
                     st.divider()
+
         else:
             st.markdown(f"**{products}**")
 
@@ -543,20 +544,29 @@ def get_top_product(products):
 
 def show_recommendations():
     """Affiche la page des recommandations clients"""
-    st.title("BH Assurance")
+    # Get the selected client type from session state
+    client_type = st.session_state.get('client_type', 'Physique')
+    
+    # Display title with current type
+    if client_type == "Physique":
+        st.title("🏠 BH Assurance - Particuliers")
+    else:
+        st.title("🏢 BH Assurance - Entreprises")
     
     st.divider()
     
-
-
-    # Add tabs for Moral and Physique person types
-    tab1, tab2 = st.tabs(["👤 Particuliers (Physique)", "🏢 Entreprises (Moral)"])
+    # Clear cached data when switching types
+    if 'active_client_type' not in st.session_state:
+        st.session_state.active_client_type = client_type
+    elif st.session_state.active_client_type != client_type:
+        # Clear cached data for the previous type
+        old_cached_key = f'cached_data_{st.session_state.active_client_type}'
+        if old_cached_key in st.session_state:
+            st.session_state[old_cached_key] = None
+        st.session_state.active_client_type = client_type
     
-    with tab1:
-        show_recommendations_for_type("Physique")
-    
-    with tab2:
-        show_recommendations_for_type("Moral")
+    # Show recommendations for the selected type
+    show_recommendations_for_type(client_type)
 
 def show_recommendations_for_type(type_personne):
     """Affiche les recommandations pour un type de personne spécifique"""
@@ -583,18 +593,19 @@ def show_recommendations_for_type(type_personne):
     # Page size from sidebar
     page_size = st.session_state.get('page_size', 5)
 
-    # Fetch data only when necessary
-    should_fetch = (
-        st.session_state[cached_data_key] is None or
-        st.session_state[last_fetched_page_key] != st.session_state[current_page_key] or
-        st.session_state[last_fetched_page_size_key] != page_size
-    )
+    # Only fetch data if this is the active client type
+    if st.session_state.get('active_client_type') == type_personne:
+        # Fetch data only when necessary
+        should_fetch = (
+            st.session_state[cached_data_key] is None or
+            st.session_state[last_fetched_page_key] != st.session_state[current_page_key] or
+            st.session_state[last_fetched_page_size_key] != page_size
+        )
 
-    st.session_state[cached_data_key] = fetch_data(st.session_state[current_page_key], page_size, type_personne)
-    st.session_state[last_fetched_page_key] = st.session_state[current_page_key]
-    st.session_state[last_fetched_page_size_key] = page_size
-
-   
+        if should_fetch:
+            st.session_state[cached_data_key] = fetch_data(st.session_state[current_page_key], page_size, type_personne)
+            st.session_state[last_fetched_page_key] = st.session_state[current_page_key]
+            st.session_state[last_fetched_page_size_key] = page_size
 
     if st.session_state[last_page_size_key] != page_size:
         st.session_state[current_page_key] = 1
@@ -602,6 +613,23 @@ def show_recommendations_for_type(type_personne):
         st.session_state[cached_data_key] = None
         st.rerun()
     data = st.session_state[cached_data_key]
+    
+    # Check if this is the active client type and if data needs to be loaded
+    if st.session_state.get('active_client_type') != type_personne:
+        # This shouldn't happen with the new navigation structure, but keep as safeguard
+        st.info(f"📋 Sélectionnez {type_personne.lower()} dans la navigation pour voir les données")
+        return
+    elif data is None:
+        # Show loading button for active client type with no data
+        st.info(f"📋 Prêt à charger les données des {type_personne.lower()}")
+        if st.button(f"🔄 Charger les données {type_personne}", key=f"load_data_{type_personne}"):
+            with st.spinner(f"Chargement des données {type_personne.lower()}..."):
+                st.session_state[cached_data_key] = fetch_data(st.session_state[current_page_key], page_size, type_personne)
+                st.session_state[last_fetched_page_key] = st.session_state[current_page_key]
+                st.session_state[last_fetched_page_size_key] = page_size
+            st.rerun()
+        return
+    
     if data and data.get('pitchs'):
         # Get total pages from data or use 1 as fallback
         total_pages = data.get('total_pages', 1)
@@ -697,6 +725,11 @@ def show_recommendations_for_type(type_personne):
                         st.metric("📦 Top produit Recommandé", top_product)
                         
                 
+                
+                st.divider()
+                # Use scrollable container for products
+                display_scrollable_products(products)
+
                 st.divider()
                 show_details=False
                 # Bouton pour toggle les détails supplémentaires
@@ -744,11 +777,11 @@ def show_recommendations_for_type(type_personne):
                         col7, col8 = st.columns(2)
 
                         with col7:
-                            st.success(f"**Total payé: {person_info['total_paye']:,.0f} TND**")
+                            st.success(f"*Total payé: {person_info['total_paye']:,.0f} TND*")
                             st.caption("Montant total des contrats réglés")
 
                         with col8:
-                            st.error(f"**Total non payé: {person_info['total_non_paye']:,.0f} TND**")
+                            st.error(f"*Total non payé: {person_info['total_non_paye']:,.0f} TND*")
                             st.caption("Montant total des contrats en attente de paiement")
 
                         # Visualisations
@@ -759,28 +792,28 @@ def show_recommendations_for_type(type_personne):
 
                         with col_graph1:
                             st.subheader("Évolution des sousscriptions")
-                            st.image(f"data:image/png;base64,{graphs['evolution_contrats']}", use_column_width=True)
+                            st.image(f"data:image/png;base64,{graphs['evolution_contrats']}",use_container_width=True)
                             st.caption("Évolution du nombre de contrats par année")
 
                         with col_graph2:
                             st.subheader("Répartition par branche")
-                            st.image(f"data:image/png;base64,{graphs['repartition_branche']}", use_column_width=True)
+                            st.image(f"data:image/png;base64,{graphs['repartition_branche']}",use_container_width=True)
 
                         col_graph3, col_graph4 = st.columns(2)
 
                         with col_graph3:
                             st.subheader("Capital assuré (TND)")
-                            st.image(f"data:image/png;base64,{graphs['capital_assure']}", use_column_width=True)
+                            st.image(f"data:image/png;base64,{graphs['capital_assure']}",use_container_width=True)
 
                         with col_graph4:
                             st.subheader("Souscriptions récentes")
-                            st.image(f"data:image/png;base64,{graphs['souscriptions_mensuelles']}", use_column_width=True)
+                            st.image(f"data:image/png;base64,{graphs['souscriptions_mensuelles']}",use_container_width=True)
 
                         col_graph5, col_graph6 = st.columns(2)
 
                         with col_graph5:
                             st.subheader("Montants payés vs non payés (TND)")
-                            st.image(f"data:image/png;base64,{graphs['total_paye_non_paye']}", use_column_width=True)
+                            st.image(f"data:image/png;base64,{graphs['total_paye_non_paye']}",use_container_width=True)
 
 
 
@@ -793,7 +826,7 @@ def show_recommendations_for_type(type_personne):
                             st.subheader("✅ PRODUITS EN COURS")
                             if person_info['produits_en_cours']:
                                 for product, count in person_info['produits_en_cours'].items():
-                                    st.info(f"**{product}** - {count} contrats")
+                                    st.info(f"*{product}* - {count} contrats")
                             else:
                                 st.warning("Aucun contrat en cours")
 
@@ -801,7 +834,7 @@ def show_recommendations_for_type(type_personne):
                             st.subheader("❌ PRODUITS EXPIRÉS")
                             if person_info['produits_expires']:
                                 for product, count in person_info['produits_expires'].items():
-                                    st.error(f"**{product}** - {count} contrats")
+                                    st.error(f"*{product}* - {count} contrats")
                             else:
                                 st.info("Aucun contrat expiré")
 
@@ -812,7 +845,7 @@ def show_recommendations_for_type(type_personne):
 
                         with col_insight1:
                             st.markdown("""
-                            <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; border-left: 4px solid #667eea;">
+                            <div style="style="background: #f8f9fa; padding: 20px; border-radius: 10px; border-left: 4px solid #dc3545;">
                                 <h4>Comportement de souscription</h4>
                                 <p>Analyse des habitudes de souscription du client</p>
                             </div>
@@ -820,7 +853,7 @@ def show_recommendations_for_type(type_personne):
 
                         with col_insight2:
                             st.markdown(f"""
-                            <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; border-left: 4px solid #667eea;">
+                            <div style="style="background: #f8f9fa; padding: 20px; border-radius: 10px; border-left: 4px solid #dc3545;">
                                 <h4>Analyse de fidélité</h4>
                                 <p>Taux de renouvellement estimé: <strong>{person_info['taux_renouvellement']:.1f}%</strong></p>
                                 <p>Produits uniques: <strong>{len(set(list(person_info['produits_en_cours'].keys()) + list(person_info['produits_expires'].keys())))}</strong></p>
@@ -830,7 +863,7 @@ def show_recommendations_for_type(type_personne):
                         with col_insight3:
                             taux_paiement = (person_info['total_paye']/person_info['valeur_totale']*100 if person_info['valeur_totale'] > 0 else 0)
                             st.markdown(f"""
-                            <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; border-left: 4px solid #667eea;">
+                            <div style="style="background: #f8f9fa; padding: 20px; border-radius: 10px; border-left: 4px solid #dc3545;">
                                 <h4>Analyse financière</h4>
                                 <p>Taux de paiement: <strong>{taux_paiement:.1f}%</strong></p>
                                 <p>Encours à recouvrer: <strong>{person_info['total_non_paye']:,.0f} TND</strong></p>
@@ -857,21 +890,21 @@ def show_recommendations_for_type(type_personne):
 
                             with col_sin_graph1:
                                 st.subheader("Répartition par état")
-                                st.image(f"data:image/png;base64,{graphs['sinistres_etat']}", use_column_width=True)
+                                st.image(f"data:image/png;base64,{graphs['sinistres_etat']}",use_container_width=True)
 
                             with col_sin_graph2:
                                 st.subheader("Évolution temporelle")
-                                st.image(f"data:image/png;base64,{graphs['evolution_sinistres']}", use_column_width=True)
+                                st.image(f"data:image/png;base64,{graphs['evolution_sinistres']}",use_container_width=True)
 
                             col_sin_graph3, col_sin_graph4 = st.columns(2)
 
                             with col_sin_graph3:
                                 st.subheader("Répartition par branche")
-                                st.image(f"data:image/png;base64,{graphs['sinistres_branche']}", use_column_width=True)
+                                st.image(f"data:image/png;base64,{graphs['sinistres_branche']}",use_container_width=True)
 
                             with col_sin_graph4:
                                 st.subheader("Montants des sinistres")
-                                st.image(f"data:image/png;base64,{graphs['montants_sinistres']}", use_column_width=True)
+                                st.image(f"data:image/png;base64,{graphs['montants_sinistres']}",use_container_width=True)
 
                             # Insights sinistres
                             col_sin_insight1, col_sin_insight2 = st.columns(2)
@@ -899,7 +932,7 @@ def show_recommendations_for_type(type_personne):
                             if person_info['sinistres_par_type']:
                                 st.subheader("Détail par type de sinistre")
                                 for sin_type, count in person_info['sinistres_par_type'].items():
-                                    st.write(f"**{sin_type}**: {count} sinistres")
+                                    st.write(f"*{sin_type}*: {count} sinistres")
 
                         else:
                             st.info("ℹ️ Aucun sinistre déclaré pour ce client")
@@ -907,11 +940,6 @@ def show_recommendations_for_type(type_personne):
                         # Bouton pour réduire les détails
                         if st.button("👆 Voir moins", key=f"btn_voir_moins{client_ref}"):
                             show_details = False
-                            st.experimental_rerun()
-
-                st.divider()
-                # Use scrollable container for products
-                display_scrollable_products(products)
 
                 # Initialize chat history and current pitch for this client
                 chat_key = f"chat_history_{unique_key}"
@@ -994,13 +1022,20 @@ def show_recommendations_for_type(type_personne):
                         logger.info(f"SMS button clicked for {unique_key}")
                         send_sms(sms_num, current_pitch_to_send)
     else:
-        st.warning(f"Aucune recommandation client disponible pour les {type_personne.lower()} ou échec du chargement des données.")
-        
-        col1, col2 = st.columns([1, 1])
-        with col1:
-            st.button("⬅️ Précédent", disabled=True, key=f"prev_button_no_data_{type_personne}")
-        with col2:
-            st.button("➡️ Suivant", disabled=True, key=f"next_button_no_data_{type_personne}")
+        # Only show warning if this is the active client type and we tried to load data
+        if st.session_state.get('active_client_type') == type_personne:
+            st.warning(f"Aucune recommandation client disponible pour les {type_personne.lower()} ou échec du chargement des données.")
+            
+            # Retry button
+            if st.button(f"🔄 Réessayer le chargement", key=f"retry_load_{type_personne}"):
+                st.session_state[cached_data_key] = None
+                st.rerun()
+            
+            col1, col2 = st.columns([1, 1])
+            with col1:
+                st.button("⬅️ Précédent", disabled=True, key=f"prev_button_no_data_{type_personne}")
+            with col2:
+                st.button("➡️ Suivant", disabled=True, key=f"next_button_no_data_{type_personne}")
 
 # Main application logic
 def main():
@@ -1013,8 +1048,17 @@ def main():
         ["Recommandations Clients", "Tableau de Bord"]
     )
     
-    # Sidebar settings (seulement pour la page recommandations)
+    # Client type navigation (only for recommendations page)
     if page == "Recommandations Clients":
+        st.sidebar.markdown("---")
+        st.sidebar.subheader("👥 Type de Client")
+        client_type = st.sidebar.radio(
+            "Sélectionner le type:",
+            ["Physique", "Moral"],
+            format_func=lambda x: "👤 Particuliers" if x == "Physique" else "🏢 Entreprises",
+            key="client_type"
+        )
+        
         st.sidebar.markdown("---")
         st.sidebar.subheader("⚙️ Paramètres")
         page_size_options = [5, 10, 20]

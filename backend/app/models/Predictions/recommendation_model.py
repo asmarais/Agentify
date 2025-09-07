@@ -8,7 +8,7 @@ import os
 parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..','..'))
 print(parent_dir)
 
-importlib.reload(recommendation)
+#importlib.reload(recommendation)
 def get_data():
     data_path = parent_dir + '/data/'
     personne_path= data_path +'personne_phy_final.xlsx'

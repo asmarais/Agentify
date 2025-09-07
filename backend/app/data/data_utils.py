@@ -2,6 +2,8 @@
 import base64
 from io import BytesIO
 from typing import Dict, Any
+import matplotlib
+matplotlib.use('Agg')  # Configure matplotlib to use non-interactive backend
 from matplotlib import pyplot as plt
 import pandas as pd
 import os
