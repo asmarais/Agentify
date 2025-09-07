@@ -29,3 +29,6 @@ psycopg2-binary
 langgraph
 langchain-core
 langchain-ollama
+
+# NLP
+sentence-transformers

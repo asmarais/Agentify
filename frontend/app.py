@@ -158,20 +158,11 @@ def fetch_data(page=1, page_size=5, type_personne="Physique"):
             response = requests.get(API_URL, params={"page": page, "page_size": page_size, "type_personne": type_personne})
             if response.status_code == 200:
                 data = response.json()
-                # Ensure the response has the correct page value
-                data['page'] = max(1, int(data.get('page', page)))
-                data['page_size'] = max(1, int(data.get('page_size', page_size)))
-                
-                # Set maximum pages if not provided by backend
-                if 'total_pages' not in data:
-                    data['total_pages'] = MAX_PAGES
-                
-                if data['page'] != page:
-                    st.warning(f"Warning: Requested page {page}, but received page {data['page']} from backend.")
                 return data
+         
             else:
-                st.error(f"Failed to fetch data: {response.status_code} - {response.text}")
-                return None
+                 st.error(f"Failed to fetch data: {response.status_code} - {response.text}")
+                 return None
         except Exception as e:
             st.error(f"Error fetching data: {str(e)}")
             return None
@@ -512,30 +503,34 @@ def show_recommendations_for_type(type_personne):
         st.session_state[last_fetched_page_size_key] != page_size
     )
 
-    if should_fetch:
-        st.session_state[cached_data_key] = fetch_data(st.session_state[current_page_key], page_size, type_personne)
-        st.session_state[last_fetched_page_key] = st.session_state[current_page_key]
-        st.session_state[last_fetched_page_size_key] = page_size
+    #if should_fetch:
+    print(st.session_state[current_page_key],'current page')
+    print(page_size,'sizeeee')
+    st.session_state[cached_data_key] = fetch_data(st.session_state[current_page_key], page_size, type_personne)
+    st.session_state[last_fetched_page_key] = st.session_state[current_page_key]
+    st.session_state[last_fetched_page_size_key] = page_size
 
-    data = st.session_state[cached_data_key]
+   
 
     if st.session_state[last_page_size_key] != page_size:
         st.session_state[current_page_key] = 1
         st.session_state[last_page_size_key] = page_size
         st.session_state[cached_data_key] = None
         st.rerun()
-
+    data = st.session_state[cached_data_key]
     if data and data.get('pitchs'):
         # Get total pages from data or use MAX_PAGES as fallback
         total_pages = data.get('total_pages', MAX_PAGES)
         current_page = data.get('page', st.session_state[current_page_key])
-        
+        print('total pages!',total_pages)
+        print('current_page!!!',current_page)
+        print('maxx pages',MAX_PAGES)
         # Ensure current page doesn't exceed total pages or max pages
         max_allowed_page = min(total_pages, MAX_PAGES)
         st.session_state[current_page_key] = min(max(1, st.session_state[current_page_key]), max_allowed_page)
 
         # Display navigation info
-        st.info(f"📄 Page {current_page} sur {total_pages} (max {MAX_PAGES}) - {type_personne}")
+        print(f"📄 Page {current_page} sur {total_pages} (max {MAX_PAGES}) - {type_personne}")
 
         col1, col2 = st.columns([1, 1])
        
@@ -570,6 +565,7 @@ def show_recommendations_for_type(type_personne):
                 age = item.get('age')
                 sexe = item.get('sexe')
                 title_info = f"💼 {profession} | 🎂 {age} ans | {'👨' if sexe in ['M', 'Homme', 'Male'] else '👩' if sexe in ['F', 'Femme', 'Female'] else '👤'} {sexe}"
+                situation_fam=item.get('situation_familiale','N/A')
             
             # Get top product for display
             top_product = get_top_product(products)
@@ -599,7 +595,7 @@ def show_recommendations_for_type(type_personne):
                     age = item.get('age', item.get('AGE', 'N/A'))
                     sexe = item.get('sexe', item.get('SEXE', 'N/A'))
                     
-                    col1, col2, col3, col4 = st.columns(4)
+                    col1, col2, col3, col4,col5 = st.columns(5)
                     
                     with col1:
                         st.metric("🔍 Référence", client_ref)
@@ -616,6 +612,8 @@ def show_recommendations_for_type(type_personne):
 
                     with col4:
                         st.metric("📦 Top produit Recommandé", top_product)
+                    with col5:
+                        st.metric("👫 Situation familiale", situation_fam)
                 
                 st.divider()
                 

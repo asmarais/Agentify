@@ -1,3 +1,4 @@
+from app.models.Predictions.recommendation_model import generate_recommendations,get_data
 from app.workflows.AgentState import AgentState
 from typing import List, Dict
 from langchain_ollama.llms import OllamaLLM
@@ -6,7 +7,7 @@ import unicodedata
 import math
 import json
 
-llm = OllamaLLM(model="llama3.2")
+llm = OllamaLLM(model="mistral")
 
 def normalize_text(text: str) -> str:
     """Normalize text to uppercase and remove accents for consistent matching."""
@@ -14,24 +15,26 @@ def normalize_text(text: str) -> str:
     return ''.join(c for c in unicodedata.normalize('NFD', text) if unicodedata.category(c) != 'Mn')
 
 async def pitch_generation_node(state: AgentState, style: str = "professionnel", max_words: int = 80) -> AgentState:
-    recommendations = state.get("recommendations", {}).get("clients", [])
-    total_clients = len(recommendations)
-
     page = state.get("page", 1)
     page_size = state.get("page_size", 5)
-
+    start_idx = (page - 1) * page_size
+    total_clients,df= get_data()
+    end_idx = min(start_idx + page_size, total_clients)
+    
+    recommendations= generate_recommendations(start_idx,end_idx,df)
     total_pages = max(1, math.ceil(total_clients / page_size))
-
+    print('size', page_size)
+    print('totaal clientt', total_clients)
+    print('totaal',total_pages)
     # Validate page
     if page < 1 or page > total_pages:
         return {**state, "error": f"Invalid page number {page}. Total pages: {total_pages}"}
-
-    start_idx = (page - 1) * page_size
-    end_idx = min(start_idx + page_size, total_clients)
-    page_clients = recommendations[start_idx:end_idx]
+    
+ 
+    page_clients = recommendations.get("clients", [])
 
     pitches: List[Dict] = []
-    type_personne = state.get("type_personne", "Moral")
+    type_personne = state.get("type_personne", "Physique")
     
     print("type personne", type_personne)
 
@@ -118,6 +121,7 @@ async def pitch_generation_node(state: AgentState, style: str = "professionnel",
             client_name = client.get('name') or client.get('PRENOM', '') + ' ' + client.get('NOM', 'Client')
             profession = client.get('profession', 'N/A')
             age = client.get('age', 'N/A')
+            situation_familiale=client.get('situation_familiale', 'Marié')
             print(age)
             sexe = client.get('sexe', 'N/A')
             print(sexe)
@@ -131,6 +135,7 @@ async def pitch_generation_node(state: AgentState, style: str = "professionnel",
                 sexe=sexe,
                 first_product=first_product,
                 garantie=garantie_text
+                
             )
             
             client_data = {
@@ -139,7 +144,8 @@ async def pitch_generation_node(state: AgentState, style: str = "professionnel",
                 "client_name": client_name.strip(),
                 "ref_personne": client.get("REF_PERSONNE"),
                 "age": age,
-                "sexe": sexe
+                "sexe": sexe,
+                'situation_familiale':situation_familiale
             }
         
         # Generate pitch using LLM
@@ -166,7 +172,7 @@ async def pitch_generation_node(state: AgentState, style: str = "professionnel",
                 client_data["pitch"] = f"Pitch personnalisé pour {client_name} concernant {first_product}"
                 pitches.append(client_data)
                 test = True
-
+    print('all of the pagesss ',total_pages )
     return {
         **state,
         "pitchs": pitches,
