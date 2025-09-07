@@ -34,3 +34,5 @@ langchain-ollama
 sentence-transformers
 tf-keras
 tensorflow
+#stat
+seaborn
