@@ -12,3 +12,4 @@ class AgentState(TypedDict):
     page: int
     page_size: int
     type_personne: str
+    total_pages: int

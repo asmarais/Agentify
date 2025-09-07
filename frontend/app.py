@@ -139,8 +139,7 @@ DASHBOARD_API_URL = "http://localhost:8000/api/dashboard"
 INTERACTIONS_API_URL = "http://localhost:8000/api/dashboard/interactions"
 STATS_API_URL = f"{DASHBOARD_API_URL}/stats"
 
-# Pagination constants
-MAX_PAGES = 50  # Maximum number of pages allowed
+# Pagination constants - removed MAX_PAGES limit to use backend total_pages
 
 def is_valid_email(email):
     pattern = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
@@ -154,7 +153,6 @@ def is_valid_phone(phone):
 def fetch_data(page=1, page_size=5, type_personne="Physique"):
     with st.spinner("Fetching client recommendations..."):
         try:
-            page = max(1, min(page, MAX_PAGES))  # Ensure page is within bounds
             response = requests.get(API_URL, params={"page": page, "page_size": page_size, "type_personne": type_personne})
             if response.status_code == 200:
                 data = response.json()
@@ -247,7 +245,6 @@ def refine_pitch(client_name, products, user_input, max_words=150):
 def fetch_interactions(page=1, page_size=20, **filters):
     """Récupère les interactions avec pagination et filtres"""
     try:
-        page = max(1, min(page, MAX_PAGES))  # Ensure page is within bounds
         params = {
             "page": page,
             "page_size": page_size
@@ -255,9 +252,7 @@ def fetch_interactions(page=1, page_size=20, **filters):
         response = requests.get(INTERACTIONS_API_URL, params=params)
         if response.status_code == 200:
             data = response.json()
-            # Set maximum pages if not provided by backend
-            if 'pagination' in data and 'total_pages' not in data['pagination']:
-                data['pagination']['total_pages'] = MAX_PAGES
+            # Use actual total_pages from backend
             return data
         else:
             st.error(f"Erreur lors de la récupération des données: {response}")
@@ -309,6 +304,64 @@ def display_stats_cards(stats):
             value=quote_requests
         )
 
+def display_detailed_stats(stats):
+    """Affiche des statistiques détaillées avec graphiques"""
+    
+    st.subheader("📊 Répartition par Type de Réponse")
+    type_distribution = stats.get("type_distribution", {})
+    if type_distribution:
+        # Create a more readable display for types
+        type_labels = {
+            "interesse": "✅ Intéressé",
+            "non_interesse": "❌ Non Intéressé", 
+            "demande_devis": "💰 Demande Devis",
+            "besoin_info": "ℹ️ Besoin d'Info",
+            "inconnu": "❓ Inconnu",
+            "en_cours": "⏳ En Cours"
+        }
+        
+        for type_key, count in type_distribution.items():
+            label = type_labels.get(type_key, type_key.title())
+            st.metric(label, count)
+    else:
+        st.info("Aucune donnée de type disponible")
+    
+    # Top senders section
+    st.subheader("👥 Top 5 des Expéditeurs les Plus Actifs")
+    top_senders = stats.get("top_senders", [])
+    if top_senders:
+        for i, sender in enumerate(top_senders, 1):
+            col1, col2 = st.columns([4, 1])
+            with col1:
+                st.write(f"**{i}.** {sender.get('email', 'Email inconnu')}")
+            with col2:
+                st.write(f"**{sender.get('count', 0)}** interactions")
+    else:
+        st.info("Aucune donnée d'expéditeur disponible")
+    
+    # Additional metrics
+    st.subheader("📋 Métriques Supplémentaires")
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        # Calculate conversion rate (interested / total)
+        total = stats.get("total_interactions", 0)
+        interested = stats.get("status_distribution", {}).get("interesse", 0)
+        conversion_rate = (interested / total * 100) if total > 0 else 0
+        st.metric("📈 Taux de Conversion", f"{conversion_rate:.1f}%")
+    
+    with col2:
+        # Calculate recent activity rate
+        recent = stats.get("recent_interactions", 0)
+        activity_rate = (recent / total * 100) if total > 0 else 0
+        st.metric("⚡ Activité Récente", f"{activity_rate:.1f}%")
+    
+    with col3:
+        # Average interactions per sender
+        unique_senders = len(stats.get("top_senders", []))
+        avg_interactions = (total / unique_senders) if unique_senders > 0 else 0
+        st.metric("📊 Moy. par Expéditeur", f"{avg_interactions:.1f}")
+
 def display_interactions_table(data):
     """Affiche le tableau des interactions"""
     if not data or not data.get("interactions"):
@@ -338,15 +391,15 @@ def display_interactions_table(data):
         
         # Configuration des colonnes
         column_config = {
-            "id": st.column_config.NumberColumn("ID", width="small"),
             "expediteur_email": st.column_config.TextColumn("📧 Email", width="medium"),
             "sujet": st.column_config.TextColumn("📝 Sujet", width="medium"),
+            "corps": st.column_config.TextColumn("✉️ Corps", width="large"),
             "type_reponse": st.column_config.TextColumn("📋 Type", width="small"),
             "timestamp": st.column_config.TextColumn("🕒 Date", width="small"),
         }
         
         # Sélectionner les colonnes à afficher
-        display_columns = ["id", "expediteur_email", "sujet", "type_reponse", "timestamp"]
+        display_columns = ["expediteur_email", "sujet","corps", "type_reponse", "timestamp"]
         df_display = df[display_columns]
         
         # Afficher le tableau
@@ -361,6 +414,17 @@ def show_dashboard():
     """Affiche le tableau de bord des interactions"""
     st.title("Tableau de Bord des Interactions")
     
+    # Fetch and display statistics
+    stats = fetch_stats()
+    if stats:
+        st.subheader("📊 Statistiques Générales")
+        display_stats_cards(stats)
+        
+        # Additional stats visualizations
+        display_detailed_stats(stats)
+        
+        st.divider()
+    
     # Pagination
     col1, col2 = st.columns([3, 1])
     with col1:
@@ -372,9 +436,6 @@ def show_dashboard():
     if 'dashboard_page' not in st.session_state:
         st.session_state.dashboard_page = 1
     
-    # Ensure dashboard page is within bounds
-    st.session_state.dashboard_page = max(1, min(st.session_state.dashboard_page, MAX_PAGES))
-    
     # Récupérer les interactions
     data = fetch_interactions(
         page=st.session_state.dashboard_page,
@@ -383,14 +444,17 @@ def show_dashboard():
     
     if data:
         pagination = data.get("pagination", {})
-        total_pages = pagination.get("total_pages", MAX_PAGES)
+        total_pages = pagination.get("total_pages", 1)
         current_page = pagination.get("page", st.session_state.dashboard_page)
         
+        # Ensure current page doesn't exceed total pages
+        st.session_state.dashboard_page = max(1, min(st.session_state.dashboard_page, total_pages))
+        
         # Display pagination info
-        st.info(f"📄 Page {current_page} sur {total_pages} (max {MAX_PAGES})")
+        st.info(f"📄 Page {current_page} sur {total_pages}")
         
         # Boutons de navigation
-        col1, col2, col3 = st.columns([1, 4, 1])
+        col1, col2, col3 = st.columns([1, 5, 1])
         
         with col1:
             if st.button("⬅️ Précédent", disabled=st.session_state.dashboard_page <= 1, key="dash_prev"):
@@ -398,8 +462,8 @@ def show_dashboard():
                 st.rerun()
         
         with col3:
-            # Disable next button if at max pages or no more data
-            disable_next = (st.session_state.dashboard_page >= total_pages) or (st.session_state.dashboard_page >= MAX_PAGES)
+            # Disable next button if at total pages
+            disable_next = (st.session_state.dashboard_page >= total_pages)
             if st.button("➡️ Suivant", disabled=disable_next, key="dash_next"):
                 st.session_state.dashboard_page += 1
                 st.rerun()
@@ -458,6 +522,8 @@ def get_top_product(products):
 def show_recommendations():
     """Affiche la page des recommandations clients"""
     st.title("BH Assurance")
+    
+    st.divider()
 
     # Add tabs for Moral and Physique person types
     tab1, tab2 = st.tabs(["👤 Particuliers (Physique)", "🏢 Entreprises (Moral)"])
@@ -490,9 +556,6 @@ def show_recommendations_for_type(type_personne):
     if last_fetched_page_size_key not in st.session_state:
         st.session_state[last_fetched_page_size_key] = None
 
-    # Ensure current page is within bounds
-    st.session_state[current_page_key] = max(1, min(st.session_state[current_page_key], MAX_PAGES))
-
     # Page size from sidebar
     page_size = st.session_state.get('page_size', 5)
 
@@ -503,9 +566,6 @@ def show_recommendations_for_type(type_personne):
         st.session_state[last_fetched_page_size_key] != page_size
     )
 
-    #if should_fetch:
-    print(st.session_state[current_page_key],'current page')
-    print(page_size,'sizeeee')
     st.session_state[cached_data_key] = fetch_data(st.session_state[current_page_key], page_size, type_personne)
     st.session_state[last_fetched_page_key] = st.session_state[current_page_key]
     st.session_state[last_fetched_page_size_key] = page_size
@@ -519,18 +579,16 @@ def show_recommendations_for_type(type_personne):
         st.rerun()
     data = st.session_state[cached_data_key]
     if data and data.get('pitchs'):
-        # Get total pages from data or use MAX_PAGES as fallback
-        total_pages = data.get('total_pages', MAX_PAGES)
+        # Get total pages from data or use 1 as fallback
+        total_pages = data.get('total_pages', 1)
         current_page = data.get('page', st.session_state[current_page_key])
-        print('total pages!',total_pages)
-        print('current_page!!!',current_page)
-        print('maxx pages',MAX_PAGES)
-        # Ensure current page doesn't exceed total pages or max pages
-        max_allowed_page = min(total_pages, MAX_PAGES)
+        
+        # Ensure current page doesn't exceed total pages
+        max_allowed_page = total_pages
         st.session_state[current_page_key] = min(max(1, st.session_state[current_page_key]), max_allowed_page)
 
         # Display navigation info
-        print(f"📄 Page {current_page} sur {total_pages} (max {MAX_PAGES}) - {type_personne}")
+        print(f"📄 Page {current_page} sur {total_pages} - {type_personne}")
 
         col1, col2 = st.columns([1, 1])
        
@@ -595,7 +653,7 @@ def show_recommendations_for_type(type_personne):
                     age = item.get('age', item.get('AGE', 'N/A'))
                     sexe = item.get('sexe', item.get('SEXE', 'N/A'))
                     
-                    col1, col2, col3, col4,col5 = st.columns(5)
+                    col1, col2, col3, col4= st.columns(4)
                     
                     with col1:
                         st.metric("🔍 Référence", client_ref)
@@ -609,11 +667,11 @@ def show_recommendations_for_type(type_personne):
                         # Display gender with appropriate icon
                         gender_display = "👨 Homme" if sexe in ['M', 'Homme', 'Male'] else "👩 Femme" if sexe in ['F', 'Femme', 'Female'] else f"👤 {sexe}"
                         st.metric("⚤ Sexe", gender_display)
+                        st.metric("👫 Situation familiale", situation_fam)
 
                     with col4:
                         st.metric("📦 Top produit Recommandé", top_product)
-                    with col5:
-                        st.metric("👫 Situation familiale", situation_fam)
+                        
                 
                 st.divider()
                 

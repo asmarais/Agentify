@@ -42,10 +42,7 @@ async def run_workflow(
         final_state = await workflow.ainvoke(state)
 
         return {
-            "page": final_state.get("page", page),
-            "page_size": final_state.get("page_size", page_size),
-            "total_clients": final_state.get("total_clients", 0),
-            "total_pages": final_state.get("total_pages", 1),
+            "total_pages": final_state.get("total_pages",1),
             "pitchs": final_state.get("pitchs", [])
         }
 

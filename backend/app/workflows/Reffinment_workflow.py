@@ -10,7 +10,7 @@ from app.workflows.ChatState import ChatState
 
 router = APIRouter()
 
-llm = OllamaLLM(model="mistral")
+llm = OllamaLLM(model="llama3.2")
 
 memory_store = {}
 

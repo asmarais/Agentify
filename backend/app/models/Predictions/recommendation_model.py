@@ -2,15 +2,21 @@ import importlib
 import app.models.Predictions.Recommendation as recommendation
 from importlib import reload
 import pandas as pd
+import os
+
+# Add parent directory to path to import shared modules
+parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+print(parent_dir)
+
 importlib.reload(recommendation)
 def get_data():
-    data_path = 'C:/Users/farah/OneDrive/Bureau/BH_assurance/Agentify1/Agentify/backend/app/data/'
-    personne_path=data_path +'personne_phy_final.xlsx'
+    data_path = parent_dir + '/data/'
+    personne_path= data_path +'personne_phy_final.xlsx'
     df=pd.read_excel(personne_path )
     return len(df),df
 def generate_recommendations(a,b,df):
-    model_path='C:/Users/farah/OneDrive/Bureau/BH_assurance/Agentify1/Agentify/backend/app/models/'
-    data_path = 'C:/Users/farah/OneDrive/Bureau/BH_assurance/Agentify1/Agentify/backend/app/data/'
+    model_path=parent_dir + '/models/'
+    data_path = parent_dir + '/data/'
 
     excel_filename = data_path + 'mapping_produit_profile.pkl'
     clustersPath= model_path + 'penetration_par_cluster.xlsx'

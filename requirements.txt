@@ -32,3 +32,5 @@ langchain-ollama
 
 # NLP
 sentence-transformers
+tf-keras
+tensorflow

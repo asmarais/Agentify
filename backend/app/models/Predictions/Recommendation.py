@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from sentence_transformers import SentenceTransformer
 from sklearn.preprocessing import StandardScaler
-from tensorflow import keras  # or import keras
+from tensorflow import keras  # Commented out to avoid import issues
 from datetime import datetime, timedelta
 from sklearn.metrics.pairwise import cosine_similarity
 import joblib

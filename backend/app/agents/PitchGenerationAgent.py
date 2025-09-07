@@ -7,7 +7,7 @@ import unicodedata
 import math
 import json
 
-llm = OllamaLLM(model="mistral")
+llm = OllamaLLM(model="llama3.2")
 
 def normalize_text(text: str) -> str:
     """Normalize text to uppercase and remove accents for consistent matching."""
@@ -15,24 +15,6 @@ def normalize_text(text: str) -> str:
     return ''.join(c for c in unicodedata.normalize('NFD', text) if unicodedata.category(c) != 'Mn')
 
 async def pitch_generation_node(state: AgentState, style: str = "professionnel", max_words: int = 80) -> AgentState:
-    page = state.get("page", 1)
-    page_size = state.get("page_size", 5)
-    start_idx = (page - 1) * page_size
-    total_clients,df= get_data()
-    end_idx = min(start_idx + page_size, total_clients)
-    
-    recommendations= generate_recommendations(start_idx,end_idx,df)
-    total_pages = max(1, math.ceil(total_clients / page_size))
-    print('size', page_size)
-    print('totaal clientt', total_clients)
-    print('totaal',total_pages)
-    # Validate page
-    if page < 1 or page > total_pages:
-        return {**state, "error": f"Invalid page number {page}. Total pages: {total_pages}"}
-    
- 
-    page_clients = recommendations.get("clients", [])
-
     pitches: List[Dict] = []
     type_personne = state.get("type_personne", "Physique")
     
@@ -87,7 +69,7 @@ async def pitch_generation_node(state: AgentState, style: str = "professionnel",
 
     garanties_dict = {normalize_text(k): v for k, v in state.get('garanties', {}).items()}
 
-    for client in page_clients:
+    for client in state.get("recommendations", []):
         produits_recommandes = client.get('top_recommendations', [])
         first_product = produits_recommandes[0].get('product', 'N/A') if produits_recommandes else 'N/A'
         product_names = [{"product": rec.get('product', 'N/A').lower().capitalize(), "final_score": rec.get("final_score", 'N/A')} for rec in produits_recommandes]
@@ -172,13 +154,9 @@ async def pitch_generation_node(state: AgentState, style: str = "professionnel",
                 client_data["pitch"] = f"Pitch personnalisé pour {client_name} concernant {first_product}"
                 pitches.append(client_data)
                 test = True
-    print('all of the pagesss ',total_pages )
     return {
         **state,
         "pitchs": pitches,
         "current_agent": "pitch_generator",
-        "page": page,
-        "page_size": page_size,
-        "total_clients": total_clients,
-        "total_pages": total_pages
+        
     }
