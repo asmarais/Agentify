@@ -7,7 +7,7 @@ import unicodedata
 import math
 import json
 
-llm = OllamaLLM(model="llama3.2")
+llm = OllamaLLM(model="mistral")
 
 def normalize_text(text: str) -> str:
     """Normalize text to uppercase and remove accents for consistent matching."""

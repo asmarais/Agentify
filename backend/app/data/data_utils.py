@@ -7,7 +7,7 @@ import pandas as pd
 import os
 import seaborn as sns
 # Add parent directory to path to import shared modules
-parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 print(parent_dir)
 
 
@@ -17,7 +17,7 @@ def get_data_stat():
     sinistres_path= data_path +'Data.xlsx'
     contrats=pd.read_excel(contrats_path )
     
-    sinistres=pd.read_excel(contrats_path,sheet_name='sinistres' )
+    sinistres=pd.read_excel(sinistres_path,sheet_name='sinistres' )
     return contrats,sinistres
 def generate_person_dashboard(person_id,contrats,sinistres):
    
@@ -310,7 +310,7 @@ def generate_person_dashboard(person_id,contrats,sinistres):
     return {
         'person_info': {
             'id': person_id,
-            'age': age,
+            
             'total_contrats': total_contrats,
             'stats_contrats': stats_contrats,
             'produits_en_cours': produits_en_cours,

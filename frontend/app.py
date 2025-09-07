@@ -171,25 +171,12 @@ def fetch_data(page=1, page_size=5, type_personne="Physique"):
         except Exception as e:
             st.error(f"Error fetching data: {str(e)}")
             return None
-def fetch_contrats_sinistres_data():
+
+     
+def fetch_profile_stat(client_ref):
     with st.spinner("Fetching client recommendations..."):
         try:
-            response = requests.get(DATA_CONTRATS_SINISTRES)
-            if response.status_code == 200:
-                data = response.json()
-                print('data_contratsss',data)
-                return data
-         
-            else:
-                 st.error(f"Failed to fetch data: {response.status_code} - {response.text}")
-                 return None
-        except Exception as e:
-            st.error(f"Error fetching data: {str(e)}")
-            return None
-def fetch_profile_stat(client_ref,contrats,sinistres):
-    with st.spinner("Fetching client recommendations..."):
-        try:
-            response = requests.get(DATA_CONTRATS_SINISTRES, params={"client_ref":client_ref,"contrats":contrats,"sinistres":sinistres})
+            response = requests.get(PROFILE_API_URL, params={"client_ref":client_ref})
             if response.status_code == 200:
                 data = response.json()
                 return data
@@ -506,7 +493,7 @@ def show_dashboard():
         # Afficher le tableau
         display_interactions_table(data)
     
-    if st.button("🔄 Rafraîchir les données"):
+    if st.button("🔄 Rafraîchir les données",key='refresh_data'):
         st.rerun()
 
 def display_scrollable_products(products):
@@ -556,13 +543,11 @@ def get_top_product(products):
 
 def show_recommendations():
     """Affiche la page des recommandations clients"""
-    response=fetch_contrats_sinistres_data()
-    
-    contrats=response.get('contrats',[])
-    sinistres=response.get('sinistres',[])
     st.title("BH Assurance")
     
     st.divider()
+    
+
 
     # Add tabs for Moral and Physique person types
     tab1, tab2 = st.tabs(["👤 Particuliers (Physique)", "🏢 Entreprises (Moral)"])
@@ -713,226 +698,218 @@ def show_recommendations_for_type(type_personne):
                         
                 
                 st.divider()
+                show_details=False
                 # Bouton pour toggle les détails supplémentaires
                 if st.button("📊 Voir plus de détails", key=f"btn_voir_client_stat{client_ref}"):
-                    show_details = True
-                else:
-                    show_details = False
+                      show_details = True
+                #with st.form(key=f"client_form_{client_ref}"):
 
                 if show_details:
-                    st.subheader("📈 Détails supplémentaires")
+                        st.subheader("📈 Détails supplémentaires")
 
-                    # Appel de votre fonction pour récupérer les données
-                    dashboard_data = fetch_contrats_sinistres_data(client_ref,contrats,sinistres)
-                    person_info = dashboard_data['person_info']
-                    graphs = dashboard_data['graphs']
+                        # Appel de votre fonction pour récupérer les données
+                        dashboard_data = fetch_profile_stat(client_ref)
+                        print('dahboard_dataaa',dashboard_data)
+                        person_info = dashboard_data['person_info']
+                        graphs = dashboard_data['graphs']
 
-                    # Header avec style CSS inline
-                    st.markdown(f"""
-                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                                color: white; padding: 40px; border-radius: 15px; margin-bottom: 30px; text-align: center;">
-                        <h1>👤 PROFIL CLIENT COMPLET</h1>
-                        <h2>{person_info.get('NOM_PRENOM', 'Nom non disponible')}</h2>
-                        <p>Référence: {person_info['id']} | Âge: {person_info['age']} ans</p>
-                    </div>
-                    """, unsafe_allow_html=True)
+                        # Header avec style CSS inline
 
-                    # Statistiques principales
-                    st.header("📊 STATISTIQUES GLOBALES")
 
-                    # Grid de statistiques
-                    col1, col2, col3, col4, col5, col6 = st.columns(6)
+                        # Statistiques principales
+                        st.header("📊 STATISTIQUES GLOBALES")
 
-                    with col1:
-                        st.metric("Total Contrats", person_info['total_contrats'], "Tous contrats confondus")
+                        # Grid de statistiques
+                        col1, col2, col3, col4, col5, col6 = st.columns(6)
 
-                    with col2:
-                        st.metric("En Cours", person_info['stats_contrats'].get('EN COURS', 0), "Contrats actifs")
+                        with col1:
+                            st.metric("Total Contrats", person_info['total_contrats'], "Tous contrats confondus")
 
-                    with col3:
-                        st.metric("Expirés", person_info['stats_contrats'].get('EXPIRE', 0), "Contrats terminés")
+                        with col2:
+                            st.metric("En Cours", person_info['stats_contrats'].get('EN COURS', 0), "Contrats actifs")
 
-                    with col4:
-                        st.metric("Payés", person_info['paiement_stats'].get('payé', 0), "Contrats payés")
+                        with col3:
+                            st.metric("Expirés", person_info['stats_contrats'].get('EXPIRE', 0), "Contrats terminés")
 
-                    with col5:
-                        st.metric("Non Payés", person_info['paiement_stats'].get('Non payé', 0), "Contrats en attente")
+                        with col4:
+                            st.metric("Payés", person_info['paiement_stats'].get('payé', 0), "Contrats payés")
 
-                    with col6:
-                        st.metric("Valeur Totale", f"{person_info['valeur_totale']:,.0f} TND", "Somme des quittances")
+                        with col5:
+                            st.metric("Non Payés", person_info['paiement_stats'].get('Non payé', 0), "Contrats en attente")
 
-                    # Informations sur les montants
-                    col7, col8 = st.columns(2)
+                        with col6:
+                            st.metric("Valeur Totale", f"{person_info['valeur_totale']:,.0f} TND", "Somme des quittances")
 
-                    with col7:
-                        st.success(f"**Total payé: {person_info['total_paye']:,.0f} TND**")
-                        st.caption("Montant total des contrats réglés")
+                        # Informations sur les montants
+                        col7, col8 = st.columns(2)
 
-                    with col8:
-                        st.error(f"**Total non payé: {person_info['total_non_paye']:,.0f} TND**")
-                        st.caption("Montant total des contrats en attente de paiement")
+                        with col7:
+                            st.success(f"**Total payé: {person_info['total_paye']:,.0f} TND**")
+                            st.caption("Montant total des contrats réglés")
 
-                    # Visualisations
-                    st.header("📈 ANALYSE VISUELLE DES CONTRATS")
+                        with col8:
+                            st.error(f"**Total non payé: {person_info['total_non_paye']:,.0f} TND**")
+                            st.caption("Montant total des contrats en attente de paiement")
 
-                    # Graphiques en 2 colonnes
-                    col_graph1, col_graph2 = st.columns(2)
+                        # Visualisations
+                        st.header("📈 ANALYSE VISUELLE DES CONTRATS")
 
-                    with col_graph1:
-                        st.subheader("Évolution des sousscriptions")
-                        st.image(f"data:image/png;base64,{graphs['evolution_contrats']}", use_column_width=True)
-                        st.caption("Évolution du nombre de contrats par année")
+                        # Graphiques en 2 colonnes
+                        col_graph1, col_graph2 = st.columns(2)
 
-                    with col_graph2:
-                        st.subheader("Répartition par branche")
-                        st.image(f"data:image/png;base64,{graphs['repartition_branche']}", use_column_width=True)
+                        with col_graph1:
+                            st.subheader("Évolution des sousscriptions")
+                            st.image(f"data:image/png;base64,{graphs['evolution_contrats']}", use_column_width=True)
+                            st.caption("Évolution du nombre de contrats par année")
 
-                    col_graph3, col_graph4 = st.columns(2)
-
-                    with col_graph3:
-                        st.subheader("Capital assuré (TND)")
-                        st.image(f"data:image/png;base64,{graphs['capital_assure']}", use_column_width=True)
-
-                    with col_graph4:
-                        st.subheader("Souscriptions récentes")
-                        st.image(f"data:image/png;base64,{graphs['souscriptions_mensuelles']}", use_column_width=True)
-
-                    col_graph5, col_graph6 = st.columns(2)
-
-                    with col_graph5:
-                        st.subheader("Montants payés vs non payés (TND)")
-                        st.image(f"data:image/png;base64,{graphs['total_paye_non_paye']}", use_column_width=True)
-
-                    with col_graph6:
-                        st.subheader("Répartition par statut de paiement")
-                        st.image(f"data:image/png;base64,{graphs['repartition_paiement']}", use_column_width=True)
-
-                    # Produits
-                    st.header("📋 PRODUITS")
-
-                    col_prod1, col_prod2 = st.columns(2)
-
-                    with col_prod1:
-                        st.subheader("✅ PRODUITS EN COURS")
-                        if person_info['produits_en_cours']:
-                            for product, count in person_info['produits_en_cours'].items():
-                                st.info(f"**{product}** - {count} contrats")
-                        else:
-                            st.warning("Aucun contrat en cours")
-
-                    with col_prod2:
-                        st.subheader("❌ PRODUITS EXPIRÉS")
-                        if person_info['produits_expires']:
-                            for product, count in person_info['produits_expires'].items():
-                                st.error(f"**{product}** - {count} contrats")
-                        else:
-                            st.info("Aucun contrat expiré")
-
-                    # Insights analytiques
-                    st.header("💡 INSIGHTS ANALYTIQUES")
-
-                    col_insight1, col_insight2, col_insight3 = st.columns(3)
-
-                    with col_insight1:
-                        st.markdown("""
-                        <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; border-left: 4px solid #667eea;">
-                            <h4>Comportement de souscription</h4>
-                            <p>Analyse des habitudes de souscription du client</p>
-                        </div>
-                        """, unsafe_allow_html=True)
-
-                    with col_insight2:
-                        st.markdown(f"""
-                        <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; border-left: 4px solid #667eea;">
-                            <h4>Analyse de fidélité</h4>
-                            <p>Taux de renouvellement estimé: <strong>{person_info['taux_renouvellement']:.1f}%</strong></p>
-                            <p>Produits uniques: <strong>{len(set(list(person_info['produits_en_cours'].keys()) + list(person_info['produits_expires'].keys())))}</strong></p>
-                        </div>
-                        """, unsafe_allow_html=True)
-
-                    with col_insight3:
-                        taux_paiement = (person_info['total_paye']/person_info['valeur_totale']*100 if person_info['valeur_totale'] > 0 else 0)
-                        st.markdown(f"""
-                        <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; border-left: 4px solid #667eea;">
-                            <h4>Analyse financière</h4>
-                            <p>Taux de paiement: <strong>{taux_paiement:.1f}%</strong></p>
-                            <p>Encours à recouvrer: <strong>{person_info['total_non_paye']:,.0f} TND</strong></p>
-                        </div>
-                        """, unsafe_allow_html=True)
-
-                    # Section Sinistres
-                    if person_info['total_sinistres'] > 0:
-                        st.header("⚠️ HISTORIQUE DES SINISTRES")
-
-                        col_sin1, col_sin2, col_sin3 = st.columns(3)
-
-                        with col_sin1:
-                            st.metric("Total Sinistres", person_info['total_sinistres'])
-
-                        with col_sin2:
-                            st.metric("Montant Total", f"{person_info['montant_total_sinistres']:,.0f} TND")
-
-                        with col_sin3:
-                            st.metric("Taux Sinistralité", f"{person_info['taux_sinistralite']:.1f}%")
-
-                        # Graphiques Sinistres
-                        col_sin_graph1, col_sin_graph2 = st.columns(2)
-
-                        with col_sin_graph1:
-                            st.subheader("Répartition par état")
-                            st.image(f"data:image/png;base64,{graphs['sinistres_etat']}", use_column_width=True)
-
-                        with col_sin_graph2:
-                            st.subheader("Évolution temporelle")
-                            st.image(f"data:image/png;base64,{graphs['evolution_sinistres']}", use_column_width=True)
-
-                        col_sin_graph3, col_sin_graph4 = st.columns(2)
-
-                        with col_sin_graph3:
+                        with col_graph2:
                             st.subheader("Répartition par branche")
-                            st.image(f"data:image/png;base64,{graphs['sinistres_branche']}", use_column_width=True)
+                            st.image(f"data:image/png;base64,{graphs['repartition_branche']}", use_column_width=True)
 
-                        with col_sin_graph4:
-                            st.subheader("Montants des sinistres")
-                            st.image(f"data:image/png;base64,{graphs['montants_sinistres']}", use_column_width=True)
+                        col_graph3, col_graph4 = st.columns(2)
 
-                        # Insights sinistres
-                        col_sin_insight1, col_sin_insight2 = st.columns(2)
+                        with col_graph3:
+                            st.subheader("Capital assuré (TND)")
+                            st.image(f"data:image/png;base64,{graphs['capital_assure']}", use_column_width=True)
 
-                        with col_sin_insight1:
-                            freq_moyenne = person_info['total_sinistres'] / person_info['total_contrats'] if person_info['total_contrats'] > 0 else 0
-                            st.markdown(f"""
-                            <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; border-left: 4px solid #dc3545;">
-                                <h4>Fréquence des sinistres</h4>
-                                <p>Ce client a déclaré en moyenne <strong>{freq_moyenne:.2f}</strong> sinistres par contrat</p>
+                        with col_graph4:
+                            st.subheader("Souscriptions récentes")
+                            st.image(f"data:image/png;base64,{graphs['souscriptions_mensuelles']}", use_column_width=True)
+
+                        col_graph5, col_graph6 = st.columns(2)
+
+                        with col_graph5:
+                            st.subheader("Montants payés vs non payés (TND)")
+                            st.image(f"data:image/png;base64,{graphs['total_paye_non_paye']}", use_column_width=True)
+
+
+
+                        # Produits
+                        st.header("📋 PRODUITS")
+
+                        col_prod1, col_prod2 = st.columns(2)
+
+                        with col_prod1:
+                            st.subheader("✅ PRODUITS EN COURS")
+                            if person_info['produits_en_cours']:
+                                for product, count in person_info['produits_en_cours'].items():
+                                    st.info(f"**{product}** - {count} contrats")
+                            else:
+                                st.warning("Aucun contrat en cours")
+
+                        with col_prod2:
+                            st.subheader("❌ PRODUITS EXPIRÉS")
+                            if person_info['produits_expires']:
+                                for product, count in person_info['produits_expires'].items():
+                                    st.error(f"**{product}** - {count} contrats")
+                            else:
+                                st.info("Aucun contrat expiré")
+
+                        # Insights analytiques
+                        st.header("💡 INSIGHTS ANALYTIQUES")
+
+                        col_insight1, col_insight2, col_insight3 = st.columns(3)
+
+                        with col_insight1:
+                            st.markdown("""
+                            <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; border-left: 4px solid #667eea;">
+                                <h4>Comportement de souscription</h4>
+                                <p>Analyse des habitudes de souscription du client</p>
                             </div>
                             """, unsafe_allow_html=True)
 
-                        with col_sin_insight2:
-                            cout_moyen = person_info['montant_total_sinistres'] / person_info['total_sinistres'] if person_info['total_sinistres'] > 0 else 0
+                        with col_insight2:
                             st.markdown(f"""
-                            <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; border-left: 4px solid #dc3545;">
-                                <h4>Analyse de gravité</h4>
-                                <p>Coût moyen par sinistre: <strong>{cout_moyen:,.0f} TND</strong></p>
-                                <p>Montant encaissé: <strong>{person_info['montant_encaisse']:,.0f} TND</strong></p>
+                            <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; border-left: 4px solid #667eea;">
+                                <h4>Analyse de fidélité</h4>
+                                <p>Taux de renouvellement estimé: <strong>{person_info['taux_renouvellement']:.1f}%</strong></p>
+                                <p>Produits uniques: <strong>{len(set(list(person_info['produits_en_cours'].keys()) + list(person_info['produits_expires'].keys())))}</strong></p>
                             </div>
                             """, unsafe_allow_html=True)
 
-                        # Détails des sinistres par type
-                        if person_info['sinistres_par_type']:
-                            st.subheader("Détail par type de sinistre")
-                            for sin_type, count in person_info['sinistres_par_type'].items():
-                                st.write(f"**{sin_type}**: {count} sinistres")
+                        with col_insight3:
+                            taux_paiement = (person_info['total_paye']/person_info['valeur_totale']*100 if person_info['valeur_totale'] > 0 else 0)
+                            st.markdown(f"""
+                            <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; border-left: 4px solid #667eea;">
+                                <h4>Analyse financière</h4>
+                                <p>Taux de paiement: <strong>{taux_paiement:.1f}%</strong></p>
+                                <p>Encours à recouvrer: <strong>{person_info['total_non_paye']:,.0f} TND</strong></p>
+                            </div>
+                            """, unsafe_allow_html=True)
 
-                    else:
-                        st.info("ℹ️ Aucun sinistre déclaré pour ce client")
+                        # Section Sinistres
+                        if person_info['total_sinistres'] > 0:
+                            st.header("⚠️ HISTORIQUE DES SINISTRES")
 
-                    # Bouton pour réduire les détails
-                    if st.button("👆 Voir moins", key=f"btn_voir_moins{client_ref}"):
-                        show_details = False
-                        st.experimental_rerun()
+                            col_sin1, col_sin2, col_sin3 = st.columns(3)
 
-                    st.divider()
+                            with col_sin1:
+                                st.metric("Total Sinistres", person_info['total_sinistres'])
+
+                            with col_sin2:
+                                st.metric("Montant Total", f"{person_info['montant_total_sinistres']:,.0f} TND")
+
+                            with col_sin3:
+                                st.metric("Taux Sinistralité", f"{person_info['taux_sinistralite']:.1f}%")
+
+                            # Graphiques Sinistres
+                            col_sin_graph1, col_sin_graph2 = st.columns(2)
+
+                            with col_sin_graph1:
+                                st.subheader("Répartition par état")
+                                st.image(f"data:image/png;base64,{graphs['sinistres_etat']}", use_column_width=True)
+
+                            with col_sin_graph2:
+                                st.subheader("Évolution temporelle")
+                                st.image(f"data:image/png;base64,{graphs['evolution_sinistres']}", use_column_width=True)
+
+                            col_sin_graph3, col_sin_graph4 = st.columns(2)
+
+                            with col_sin_graph3:
+                                st.subheader("Répartition par branche")
+                                st.image(f"data:image/png;base64,{graphs['sinistres_branche']}", use_column_width=True)
+
+                            with col_sin_graph4:
+                                st.subheader("Montants des sinistres")
+                                st.image(f"data:image/png;base64,{graphs['montants_sinistres']}", use_column_width=True)
+
+                            # Insights sinistres
+                            col_sin_insight1, col_sin_insight2 = st.columns(2)
+
+                            with col_sin_insight1:
+                                freq_moyenne = person_info['total_sinistres'] / person_info['total_contrats'] if person_info['total_contrats'] > 0 else 0
+                                st.markdown(f"""
+                                <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; border-left: 4px solid #dc3545;">
+                                    <h4>Fréquence des sinistres</h4>
+                                    <p>Ce client a déclaré en moyenne <strong>{freq_moyenne:.2f}</strong> sinistres par contrat</p>
+                                </div>
+                                """, unsafe_allow_html=True)
+
+                            with col_sin_insight2:
+                                cout_moyen = person_info['montant_total_sinistres'] / person_info['total_sinistres'] if person_info['total_sinistres'] > 0 else 0
+                                st.markdown(f"""
+                                <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; border-left: 4px solid #dc3545;">
+                                    <h4>Analyse de gravité</h4>
+                                    <p>Coût moyen par sinistre: <strong>{cout_moyen:,.0f} TND</strong></p>
+                                    <p>Montant encaissé: <strong>{person_info['montant_encaisse']:,.0f} TND</strong></p>
+                                </div>
+                                """, unsafe_allow_html=True)
+
+                            # Détails des sinistres par type
+                            if person_info['sinistres_par_type']:
+                                st.subheader("Détail par type de sinistre")
+                                for sin_type, count in person_info['sinistres_par_type'].items():
+                                    st.write(f"**{sin_type}**: {count} sinistres")
+
+                        else:
+                            st.info("ℹ️ Aucun sinistre déclaré pour ce client")
+
+                        # Bouton pour réduire les détails
+                        if st.button("👆 Voir moins", key=f"btn_voir_moins{client_ref}"):
+                            show_details = False
+                            st.experimental_rerun()
+
+                st.divider()
                 # Use scrollable container for products
                 display_scrollable_products(products)
 

@@ -5,7 +5,7 @@ import pandas as pd
 import os
 
 # Add parent directory to path to import shared modules
-parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..','..'))
 print(parent_dir)
 
 importlib.reload(recommendation)
@@ -14,6 +14,7 @@ def get_data():
     personne_path= data_path +'personne_phy_final.xlsx'
     df=pd.read_excel(personne_path )
     return len(df),df
+
 def generate_recommendations(a,b,df):
     model_path=parent_dir + '/models/'
     data_path = parent_dir + '/data/'
