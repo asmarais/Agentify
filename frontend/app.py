@@ -429,7 +429,7 @@ def display_interactions_table(data):
             df_display,
             column_config=column_config,
             hide_index=True,
-            use_container_width=True
+            use_container_width=False
         )
 
 def show_dashboard():
@@ -792,28 +792,28 @@ def show_recommendations_for_type(type_personne):
 
                         with col_graph1:
                             st.subheader("Évolution des sousscriptions")
-                            st.image(f"data:image/png;base64,{graphs['evolution_contrats']}",use_container_width=True)
+                            st.image(f"data:image/png;base64,{graphs['evolution_contrats']}")
                             st.caption("Évolution du nombre de contrats par année")
 
                         with col_graph2:
                             st.subheader("Répartition par branche")
-                            st.image(f"data:image/png;base64,{graphs['repartition_branche']}",use_container_width=True)
+                            st.image(f"data:image/png;base64,{graphs['repartition_branche']}")
 
                         col_graph3, col_graph4 = st.columns(2)
 
                         with col_graph3:
                             st.subheader("Capital assuré (TND)")
-                            st.image(f"data:image/png;base64,{graphs['capital_assure']}",use_container_width=True)
+                            st.image(f"data:image/png;base64,{graphs['capital_assure']}")
 
                         with col_graph4:
                             st.subheader("Souscriptions récentes")
-                            st.image(f"data:image/png;base64,{graphs['souscriptions_mensuelles']}",use_container_width=True)
+                            st.image(f"data:image/png;base64,{graphs['souscriptions_mensuelles']}")
 
                         col_graph5, col_graph6 = st.columns(2)
 
                         with col_graph5:
                             st.subheader("Montants payés vs non payés (TND)")
-                            st.image(f"data:image/png;base64,{graphs['total_paye_non_paye']}",use_container_width=True)
+                            st.image(f"data:image/png;base64,{graphs['total_paye_non_paye']}")
 
 
 
@@ -841,32 +841,15 @@ def show_recommendations_for_type(type_personne):
                         # Insights analytiques
                         st.header("💡 INSIGHTS ANALYTIQUES")
 
-                        col_insight1, col_insight2, col_insight3 = st.columns(3)
-
-                        with col_insight1:
-                            st.markdown("""
-                            <div style="style="background: #f8f9fa; padding: 20px; border-radius: 10px; border-left: 4px solid #dc3545;">
-                                <h4>Comportement de souscription</h4>
-                                <p>Analyse des habitudes de souscription du client</p>
-                            </div>
-                            """, unsafe_allow_html=True)
-
+                        col_insight2 = st.columns(1)[0]
+                       
                         with col_insight2:
-                            st.markdown(f"""
-                            <div style="style="background: #f8f9fa; padding: 20px; border-radius: 10px; border-left: 4px solid #dc3545;">
-                                <h4>Analyse de fidélité</h4>
-                                <p>Taux de renouvellement estimé: <strong>{person_info['taux_renouvellement']:.1f}%</strong></p>
-                                <p>Produits uniques: <strong>{len(set(list(person_info['produits_en_cours'].keys()) + list(person_info['produits_expires'].keys())))}</strong></p>
-                            </div>
-                            """, unsafe_allow_html=True)
-
-                        with col_insight3:
                             taux_paiement = (person_info['total_paye']/person_info['valeur_totale']*100 if person_info['valeur_totale'] > 0 else 0)
                             st.markdown(f"""
-                            <div style="style="background: #f8f9fa; padding: 20px; border-radius: 10px; border-left: 4px solid #dc3545;">
-                                <h4>Analyse financière</h4>
-                                <p>Taux de paiement: <strong>{taux_paiement:.1f}%</strong></p>
-                                <p>Encours à recouvrer: <strong>{person_info['total_non_paye']:,.0f} TND</strong></p>
+                            <div style="background: #2d3748; padding: 20px; border-radius: 10px; border-left: 4px solid #e53e3e; color: #e2e8f0;">
+                                <h4 style="color: #feb2b2; margin-bottom: 15px;">💰 Analyse financière</h4>
+                                <p style="margin: 8px 0;">Taux de paiement: <strong style="color: #fc8181;">{taux_paiement:.1f}%</strong></p>
+                                <p style="margin: 8px 0;">Encours à recouvrer: <strong style="color: #fc8181;">{person_info['total_non_paye']:,.0f} TND</strong></p>
                             </div>
                             """, unsafe_allow_html=True)
 
@@ -890,21 +873,21 @@ def show_recommendations_for_type(type_personne):
 
                             with col_sin_graph1:
                                 st.subheader("Répartition par état")
-                                st.image(f"data:image/png;base64,{graphs['sinistres_etat']}",use_container_width=True)
+                                st.image(f"data:image/png;base64,{graphs['sinistres_etat']}")
 
                             with col_sin_graph2:
                                 st.subheader("Évolution temporelle")
-                                st.image(f"data:image/png;base64,{graphs['evolution_sinistres']}",use_container_width=True)
+                                st.image(f"data:image/png;base64,{graphs['evolution_sinistres']}")
 
                             col_sin_graph3, col_sin_graph4 = st.columns(2)
 
                             with col_sin_graph3:
                                 st.subheader("Répartition par branche")
-                                st.image(f"data:image/png;base64,{graphs['sinistres_branche']}",use_container_width=True)
+                                st.image(f"data:image/png;base64,{graphs['sinistres_branche']}")
 
                             with col_sin_graph4:
                                 st.subheader("Montants des sinistres")
-                                st.image(f"data:image/png;base64,{graphs['montants_sinistres']}",use_container_width=True)
+                                st.image(f"data:image/png;base64,{graphs['montants_sinistres']}")
 
                             # Insights sinistres
                             col_sin_insight1, col_sin_insight2 = st.columns(2)
@@ -912,19 +895,19 @@ def show_recommendations_for_type(type_personne):
                             with col_sin_insight1:
                                 freq_moyenne = person_info['total_sinistres'] / person_info['total_contrats'] if person_info['total_contrats'] > 0 else 0
                                 st.markdown(f"""
-                                <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; border-left: 4px solid #dc3545;">
-                                    <h4>Fréquence des sinistres</h4>
-                                    <p>Ce client a déclaré en moyenne <strong>{freq_moyenne:.2f}</strong> sinistres par contrat</p>
+                                <div style="background: #2d3748; padding: 20px; border-radius: 10px; border-left: 4px solid #e53e3e; color: #e2e8f0;">
+                                    <h4 style="color: #feb2b2; margin-bottom: 15px;">📊 Fréquence des sinistres</h4>
+                                    <p style="margin: 8px 0;">Ce client a déclaré en moyenne <strong style="color: #fc8181;">{freq_moyenne:.2f}</strong> sinistres par contrat</p>
                                 </div>
                                 """, unsafe_allow_html=True)
 
                             with col_sin_insight2:
                                 cout_moyen = person_info['montant_total_sinistres'] / person_info['total_sinistres'] if person_info['total_sinistres'] > 0 else 0
                                 st.markdown(f"""
-                                <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; border-left: 4px solid #dc3545;">
-                                    <h4>Analyse de gravité</h4>
-                                    <p>Coût moyen par sinistre: <strong>{cout_moyen:,.0f} TND</strong></p>
-                                    <p>Montant encaissé: <strong>{person_info['montant_encaisse']:,.0f} TND</strong></p>
+                                <div style="background: #2d3748; padding: 20px; border-radius: 10px; border-left: 4px solid #e53e3e; color: #e2e8f0;">
+                                    <h4 style="color: #feb2b2; margin-bottom: 15px;">⚖️ Analyse de gravité</h4>
+                                    <p style="margin: 8px 0;">Coût moyen par sinistre: <strong style="color: #fc8181;">{cout_moyen:,.0f} TND</strong></p>
+                                    <p style="margin: 8px 0;">Montant encaissé: <strong style="color: #fc8181;">{person_info['montant_encaisse']:,.0f} TND</strong></p>
                                 </div>
                                 """, unsafe_allow_html=True)
 
